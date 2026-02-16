@@ -102,6 +102,8 @@ FILTER_OPERATORS_BY_TYPE: dict[str, set[str]] = {
     "boolean": {"=", "!=", "is_null", "is_not_null"},
 }
 
+HAVING_OPERATORS = {"=", "!=", ">", "<", ">=", "<="}
+
 
 def map_duckdb_type(duckdb_type: str) -> str:
     """Map a DuckDB type string to our simplified type system."""
@@ -670,6 +672,12 @@ class DuckDBEngine(Engine):
         ):
             raise ValueError("aggregations must be an array of objects")
 
+        having_items = spec.get("having") or []
+        if not isinstance(having_items, list) or not all(
+            isinstance(h, dict) for h in having_items
+        ):
+            raise ValueError("having must be an array of objects")
+
         sort_items = spec.get("sort") or []
         if not isinstance(sort_items, list) or not all(
             isinstance(s, dict) for s in sort_items
@@ -692,6 +700,7 @@ class DuckDBEngine(Engine):
         for col in group_by:
             select_parts.append(self._quote_ident(col))
 
+        agg_alias_types: dict[str, str] = {}
         agg_ops = {
             "count": "COUNT",
             "sum": "SUM",
@@ -725,6 +734,15 @@ class DuckDBEngine(Engine):
                 f"{agg_ops[op]}({target}) AS {self._quote_ident(safe_alias)}"
             )
 
+            if op == "count":
+                agg_alias_types[safe_alias] = "integer"
+            elif op == "avg":
+                agg_alias_types[safe_alias] = "float"
+            elif col == "*":
+                agg_alias_types[safe_alias] = "float"
+            else:
+                agg_alias_types[safe_alias] = col_meta[col]["app_type"]
+
         has_agg = len(aggregations) > 0
         if not select_parts:
             select_sql = "*"
@@ -740,6 +758,35 @@ class DuckDBEngine(Engine):
             # Treat groupBy without aggregations as distinct projection
             select_sql = ", ".join(self._quote_ident(c) for c in group_by)
             group_sql = "GROUP BY " + ", ".join(self._quote_ident(c) for c in group_by)
+
+        having_clauses: list[str] = []
+        having_params: list[Any] = []
+        if having_items:
+            if not has_agg:
+                raise ValueError("HAVING requires at least one aggregation")
+            if not group_by:
+                raise ValueError("HAVING requires groupBy with aggregations")
+
+            for h in having_items:
+                metric = h.get("metric")
+                op = h.get("operator")
+                raw_value = h.get("value")
+
+                if not isinstance(metric, str) or not metric:
+                    raise ValueError("HAVING metric is required")
+                if metric not in agg_alias_types:
+                    raise ValueError(f"Invalid HAVING metric: {metric}")
+                if not isinstance(op, str) or op not in HAVING_OPERATORS:
+                    raise ValueError(
+                        f"Unsupported HAVING operator '{op}' for metric '{metric}'"
+                    )
+
+                metric_type = agg_alias_types[metric]
+                value = self._coerce_value(raw_value, metric_type, metric, op)
+                having_clauses.append(f"{self._quote_ident(metric)} {op} ?")
+                having_params.append(value)
+
+        having_sql = f"HAVING {' AND '.join(having_clauses)}" if having_clauses else ""
 
         order_parts: list[str] = []
         for s in sort_items:
@@ -763,8 +810,8 @@ class DuckDBEngine(Engine):
 
         order_sql = f"ORDER BY {', '.join(order_parts)}" if order_parts else ""
 
-        sql = f"SELECT {select_sql} FROM {table_sql} {where_sql} {group_sql} {order_sql} LIMIT ?"
-        params = [*filter_params, limit]
+        sql = f"SELECT {select_sql} FROM {table_sql} {where_sql} {group_sql} {having_sql} {order_sql} LIMIT ?"
+        params = [*filter_params, *having_params, limit]
 
         result = self.conn.execute(sql, params)
         col_names = [desc[0] for desc in result.description]
@@ -782,7 +829,7 @@ class DuckDBEngine(Engine):
 
         generated_sql = sql
         generated_python = self._to_python_query_repr(
-            filters, group_by, aggregations, sort_items, limit
+            filters, group_by, aggregations, having_items, sort_items, limit
         )
 
         return {
@@ -798,6 +845,7 @@ class DuckDBEngine(Engine):
         filters: list[dict],
         group_by: list[str],
         aggregations: list[dict],
+        having_items: list[dict],
         sort_items: list[dict],
         limit: int,
     ) -> str:
@@ -846,6 +894,17 @@ class DuckDBEngine(Engine):
                 parts.append(
                     f".groupby({group_by!r}, dropna=False).agg({{{', '.join(agg_chunks)}}}).reset_index()"
                 )
+
+                if having_items:
+                    query_parts: list[str] = []
+                    for h in having_items:
+                        metric = str(h.get("metric"))
+                        op = str(h.get("operator"))
+                        value = h.get("value")
+                        py_op = "==" if op == "=" else op
+                        query_parts.append(f"(`{metric}` {py_op} {repr(value)})")
+                    if query_parts:
+                        parts.append(f".query({(' and '.join(query_parts))!r})")
             else:
                 if len(aggregations) == 1:
                     agg = aggregations[0]

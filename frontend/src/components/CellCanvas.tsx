@@ -38,7 +38,7 @@ function CompareCell({ cell }: { cell: InvestigationCell }) {
   const activeCellId = useAppStore((s) => s.activeCellId)
   const isActive = activeCellId === cell.id
 
-  const sourceCells = cells.filter((c) => c.id !== cell.id && (c.type === 'table' || c.type === 'sql') && !!c.result)
+  const sourceCells = cells.filter((c) => c.id !== cell.id && (c.type === 'table' || c.type === 'sql'))
   const compare = cell.compare ?? { leftCellId: null, rightCellId: null }
   const left = sourceCells.find((c) => c.id === compare.leftCellId) ?? null
   const right = sourceCells.find((c) => c.id === compare.rightCellId) ?? null
@@ -48,6 +48,14 @@ function CompareCell({ cell }: { cell: InvestigationCell }) {
 
   const leftDataset = datasets.find((d) => d.id === left?.datasetId)
   const rightDataset = datasets.find((d) => d.id === right?.datasetId)
+
+  function selectLeft(value: string) {
+    updateCell(cell.id, { compare: { ...compare, leftCellId: value || null } })
+  }
+
+  function selectRight(value: string) {
+    updateCell(cell.id, { compare: { ...compare, rightCellId: value || null } })
+  }
 
   return (
     <div
@@ -63,22 +71,30 @@ function CompareCell({ cell }: { cell: InvestigationCell }) {
       <div className="px-2.5 py-1.5 border-b border-border bg-bg-deep flex items-center gap-2 text-xs flex-wrap">
         <select
           value={compare.leftCellId ?? ''}
-          onChange={(e) => updateCell(cell.id, { compare: { ...compare, leftCellId: e.target.value || null } })}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => selectLeft(e.target.value)}
           className="h-6 px-2 rounded border border-border-strong bg-surface-elevated text-text-secondary min-w-40"
         >
           <option value="">Left source cell</option>
           {sourceCells.map((c) => (
-            <option key={c.id} value={c.id}>{c.title}</option>
+            <option key={c.id} value={c.id}>
+              {c.title} · {datasets.find((d) => d.id === c.datasetId)?.name ?? 'dataset'}{c.result ? '' : ' (run)'}
+            </option>
           ))}
         </select>
         <select
           value={compare.rightCellId ?? ''}
-          onChange={(e) => updateCell(cell.id, { compare: { ...compare, rightCellId: e.target.value || null } })}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => selectRight(e.target.value)}
           className="h-6 px-2 rounded border border-border-strong bg-surface-elevated text-text-secondary min-w-40"
         >
           <option value="">Right source cell</option>
           {sourceCells.map((c) => (
-            <option key={c.id} value={c.id}>{c.title}</option>
+            <option key={c.id} value={c.id}>
+              {c.title} · {datasets.find((d) => d.id === c.datasetId)?.name ?? 'dataset'}{c.result ? '' : ' (run)'}
+            </option>
           ))}
         </select>
 
@@ -89,8 +105,12 @@ function CompareCell({ cell }: { cell: InvestigationCell }) {
         )}
       </div>
 
-      {!leftResult || !rightResult ? (
-        <div className="px-3 py-4 text-xs text-text-muted">Select two source cells with results to compare.</div>
+      {!left || !right ? (
+        <div className="px-3 py-4 text-xs text-text-muted">Select two source cells to compare.</div>
+      ) : (!leftResult || !rightResult) ? (
+        <div className="px-3 py-4 text-xs text-text-muted">
+          One or both selected cells have no result yet. Run those source cells, then compare.
+        </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
           <ComparePane title={left?.title ?? 'Left'} subtitle={leftDataset?.name} result={leftResult} />

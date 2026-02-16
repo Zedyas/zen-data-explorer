@@ -16,6 +16,7 @@ function defaultTableSpec(): TableQuerySpec {
     filters: [],
     groupBy: [],
     aggregations: [],
+    having: [],
     sort: [],
     limit: 200,
   }
@@ -223,11 +224,15 @@ export const useAppStore = create<AppState>((set) => ({
         filters: s.filters,
         groupBy: [],
         aggregations: [],
+        having: [],
         sort: s.sort ? [s.sort] : [],
         limit: s.pageSize,
       }
 
-      const firstTableCell = type === 'table' && s.cells.filter((c) => c.type === 'table').length === 0
+      const firstTableCell =
+        type === 'table' &&
+        !!activeDataset &&
+        s.cells.filter((c) => c.type === 'table' && c.datasetId === activeDataset.id).length === 0
       const id = `${type}_${++cellIdCounter}_${Date.now()}`
       const cell: InvestigationCell = {
         id,

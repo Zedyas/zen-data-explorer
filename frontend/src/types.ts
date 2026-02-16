@@ -92,10 +92,17 @@ export interface SortSpec {
   direction: 'asc' | 'desc'
 }
 
+export interface HavingSpec {
+  metric: string
+  operator: '=' | '!=' | '>' | '<' | '>=' | '<='
+  value: string | number
+}
+
 export interface TableQuerySpec {
   filters: Filter[]
   groupBy: string[]
   aggregations: AggregationSpec[]
+  having: HavingSpec[]
   sort: SortSpec[]
   limit?: number
 }

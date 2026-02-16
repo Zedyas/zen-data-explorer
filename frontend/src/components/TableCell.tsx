@@ -1,17 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRunTableQuery } from '../api.ts'
 import { useAppStore } from '../store.ts'
-import type { Filter, InvestigationCell, TableQueryResponse } from '../types.ts'
+import type { AggregationSpec, Filter, HavingSpec, InvestigationCell, TableQueryResponse } from '../types.ts'
 
 const FILTER_OPS = ['=', '!=', '>', '<', '>=', '<=', 'contains', 'starts_with', 'is_null', 'is_not_null']
 const AGG_OPS = ['count', 'sum', 'avg', 'min', 'max'] as const
+const HAVING_OPS = ['=', '!=', '>', '<', '>=', '<='] as const
 const INPUT_CLASS = 'h-6 bg-surface-elevated border border-border-strong rounded px-1.5 text-[11px] text-text-secondary'
 const ACTION_CLASS = 'h-6 px-2 rounded border border-border-strong bg-surface text-[11px] text-text-secondary hover:text-text hover:border-accent transition-colors'
 
-type ControlKey = 'filter' | 'group' | 'agg' | 'sort' | 'limit'
+type ControlKey = 'filter' | 'analyze' | 'sort' | 'limit'
 
 function isNullOp(op: string) {
   return op === 'is_null' || op === 'is_not_null'
+}
+
+function getAggAlias(agg: AggregationSpec): string {
+  if (typeof agg.as === 'string' && agg.as.trim()) return agg.as.trim()
+  return `${agg.op}_${agg.column.replace('*', 'all')}`
 }
 
 export function TableCell({ cell }: { cell: InvestigationCell }) {
@@ -24,7 +30,7 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
   const activeCellId = useAppStore((s) => s.activeCellId)
   const mutation = useRunTableQuery(dataset?.id)
 
-  const spec = cell.tableSpec ?? { filters: [], groupBy: [], aggregations: [], sort: [], limit: 200 }
+  const spec = cell.tableSpec ?? { filters: [], groupBy: [], aggregations: [], having: [], sort: [], limit: 200 }
   const columns = dataset?.columns ?? []
   const isActive = activeCellId === cell.id
 
@@ -44,6 +50,25 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
     direction: 'asc',
   })
   const [limitDraft, setLimitDraft] = useState(String(spec.limit ?? 200))
+
+  const havingMetrics = useMemo(() => spec.aggregations.map(getAggAlias), [spec.aggregations])
+  const [havingDraft, setHavingDraft] = useState<HavingSpec>({
+    metric: havingMetrics[0] ?? '',
+    operator: '>',
+    value: '',
+  })
+
+  useEffect(() => {
+    if (havingMetrics.length === 0) {
+      setHavingDraft((s) => ({ ...s, metric: '' }))
+      return
+    }
+    setHavingDraft((s) =>
+      havingMetrics.includes(s.metric)
+        ? s
+        : { ...s, metric: havingMetrics[0] },
+    )
+  }, [havingMetrics])
 
   const result = cell.result as TableQueryResponse | null
   const canRun = useMemo(() => !!dataset, [dataset])
@@ -88,10 +113,26 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
   }
 
   function addAgg() {
+    const nextAgg: AggregationSpec = { op: aggDraft.op, column: aggDraft.column }
+    const nextAggs = [...spec.aggregations, nextAgg]
     updateCell(cell.id, {
       tableSpec: {
         ...spec,
-        aggregations: [...spec.aggregations, { op: aggDraft.op, column: aggDraft.column }],
+        aggregations: nextAggs,
+      },
+    })
+  }
+
+  function addHaving() {
+    if (!havingDraft.metric || !havingDraft.operator) return
+    const raw = String(havingDraft.value).trim()
+    if (!raw) return
+    const parsedNum = Number(raw)
+    const value: string | number = Number.isFinite(parsedNum) ? parsedNum : raw
+    updateCell(cell.id, {
+      tableSpec: {
+        ...spec,
+        having: [...spec.having, { metric: havingDraft.metric, operator: havingDraft.operator, value }],
       },
     })
   }
@@ -159,13 +200,17 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
 
       <div className="px-2.5 py-1 border-b border-border-strong bg-bg-deep flex items-center gap-1.5 text-[10px] font-mono flex-wrap">
         <ControlToggle label="Filter" value={String(spec.filters.length)} active={activeControl === 'filter'} onClick={() => toggleControl('filter')} />
-        <ControlToggle label="Group" value={String(spec.groupBy.length)} active={activeControl === 'group'} onClick={() => toggleControl('group')} />
-        <ControlToggle label="Agg" value={String(spec.aggregations.length)} active={activeControl === 'agg'} onClick={() => toggleControl('agg')} />
+        <ControlToggle
+          label="Analyze"
+          value={`G${spec.groupBy.length} A${spec.aggregations.length} H${spec.having.length}`}
+          active={activeControl === 'analyze'}
+          onClick={() => toggleControl('analyze')}
+        />
         <ControlToggle label="Sort" value={String(spec.sort.length)} active={activeControl === 'sort'} onClick={() => toggleControl('sort')} />
         <ControlToggle label="Limit" value={String(spec.limit ?? 200)} active={activeControl === 'limit'} onClick={() => toggleControl('limit')} />
       </div>
 
-      {(spec.filters.length > 0 || spec.groupBy.length > 0 || spec.aggregations.length > 0 || spec.sort.length > 0) && (
+      {(spec.filters.length > 0 || spec.groupBy.length > 0 || spec.aggregations.length > 0 || spec.having.length > 0 || spec.sort.length > 0) && (
         <div className="px-2.5 py-1 border-b border-border bg-bg-deep/80 flex items-center gap-1 flex-wrap">
           {spec.filters.map((f, idx) => (
             <Chip
@@ -184,8 +229,25 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
           {spec.aggregations.map((a, idx) => (
             <Chip
               key={`a-${idx}`}
-              label={`${a.op}(${a.column})`}
-              onRemove={() => updateCell(cell.id, { tableSpec: { ...spec, aggregations: spec.aggregations.filter((_, i) => i !== idx) } })}
+              label={`${getAggAlias(a)}=${a.op}(${a.column})`}
+              onRemove={() => {
+                const removed = getAggAlias(a)
+                const nextAggs = spec.aggregations.filter((_, i) => i !== idx)
+                updateCell(cell.id, {
+                  tableSpec: {
+                    ...spec,
+                    aggregations: nextAggs,
+                    having: spec.having.filter((h) => h.metric !== removed),
+                  },
+                })
+              }}
+            />
+          ))}
+          {spec.having.map((h, idx) => (
+            <Chip
+              key={`h-${idx}`}
+              label={`having ${h.metric} ${h.operator} ${String(h.value)}`}
+              onRemove={() => updateCell(cell.id, { tableSpec: { ...spec, having: spec.having.filter((_, i) => i !== idx) } })}
             />
           ))}
           {spec.sort.map((s, idx) => (
@@ -228,37 +290,71 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
             </div>
           )}
 
-          {activeControl === 'group' && (
-            <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
-              <select
-                value={groupByDraft}
-                onChange={(e) => setGroupByDraft(e.target.value)}
-                className={INPUT_CLASS}
-              >
-                {columns.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
-              </select>
-              <button onClick={addGroup} className={ACTION_CLASS}>+ Group</button>
-            </div>
-          )}
+          {activeControl === 'analyze' && (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
+                <span className="text-text-muted font-mono text-[10px]">Group</span>
+                <select
+                  value={groupByDraft}
+                  onChange={(e) => setGroupByDraft(e.target.value)}
+                  className={INPUT_CLASS}
+                >
+                  {columns.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+                <button onClick={addGroup} className={ACTION_CLASS}>+ Group</button>
+              </div>
 
-          {activeControl === 'agg' && (
-            <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
-              <select
-                value={aggDraft.op}
-                onChange={(e) => setAggDraft((s) => ({ ...s, op: e.target.value as typeof AGG_OPS[number] }))}
-                className={INPUT_CLASS}
-              >
-                {AGG_OPS.map((op) => <option key={op} value={op}>{op}</option>)}
-              </select>
-              <select
-                value={aggDraft.column}
-                onChange={(e) => setAggDraft((s) => ({ ...s, column: e.target.value }))}
-                className={INPUT_CLASS}
-              >
-                <option value="*">*</option>
-                {columns.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
-              </select>
-              <button onClick={addAgg} className={ACTION_CLASS}>+ Agg</button>
+              <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
+                <span className="text-text-muted font-mono text-[10px]">Agg</span>
+                <select
+                  value={aggDraft.op}
+                  onChange={(e) => setAggDraft((s) => ({ ...s, op: e.target.value as typeof AGG_OPS[number] }))}
+                  className={INPUT_CLASS}
+                >
+                  {AGG_OPS.map((op) => <option key={op} value={op}>{op}</option>)}
+                </select>
+                <select
+                  value={aggDraft.column}
+                  onChange={(e) => setAggDraft((s) => ({ ...s, column: e.target.value }))}
+                  className={INPUT_CLASS}
+                >
+                  <option value="*">*</option>
+                  {columns.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+                <button onClick={addAgg} className={ACTION_CLASS}>+ Agg</button>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
+                <span className="text-text-muted font-mono text-[10px]">Having</span>
+                <select
+                  value={havingDraft.metric}
+                  onChange={(e) => setHavingDraft((s) => ({ ...s, metric: e.target.value }))}
+                  className={INPUT_CLASS}
+                  disabled={havingMetrics.length === 0}
+                >
+                  {havingMetrics.length === 0 ? (
+                    <option value="">add agg first</option>
+                  ) : (
+                    havingMetrics.map((m) => <option key={m} value={m}>{m}</option>)
+                  )}
+                </select>
+                <select
+                  value={havingDraft.operator}
+                  onChange={(e) => setHavingDraft((s) => ({ ...s, operator: e.target.value as HavingSpec['operator'] }))}
+                  className={INPUT_CLASS}
+                  disabled={havingMetrics.length === 0}
+                >
+                  {HAVING_OPS.map((op) => <option key={op} value={op}>{op}</option>)}
+                </select>
+                <input
+                  value={String(havingDraft.value)}
+                  onChange={(e) => setHavingDraft((s) => ({ ...s, value: e.target.value }))}
+                  placeholder="value"
+                  className={`${INPUT_CLASS} min-w-24`}
+                  disabled={havingMetrics.length === 0}
+                />
+                <button onClick={addHaving} className={ACTION_CLASS} disabled={havingMetrics.length === 0}>+ Having</button>
+              </div>
             </div>
           )}
 

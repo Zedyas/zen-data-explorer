@@ -159,6 +159,7 @@ class TableQueryRequest(BaseModel):
     filters: list[dict] = Field(default_factory=list)
     groupBy: list[str] = Field(default_factory=list)
     aggregations: list[dict] = Field(default_factory=list)
+    having: list[dict] = Field(default_factory=list)
     sort: list[dict] = Field(default_factory=list)
     limit: int = 200
 

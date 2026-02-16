@@ -162,3 +162,34 @@ def test_table_query_rejects_invalid_aggregation_column() -> None:
     )
     assert resp.status_code == 400
     assert "Invalid aggregation column" in resp.text
+
+
+def test_table_query_supports_having() -> None:
+    dataset_id = _dataset_id()
+    resp = client.post(
+        f"/api/datasets/{dataset_id}/table-query",
+        json={
+            "groupBy": ["region"],
+            "aggregations": [{"op": "sum", "column": "amount", "as": "amount_total"}],
+            "having": [{"metric": "amount_total", "operator": ">", "value": 1000}],
+            "sort": [{"column": "amount_total", "direction": "desc"}],
+            "limit": 50,
+        },
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert "HAVING" in payload["generatedSql"]
+    assert isinstance(payload["rows"], list)
+
+
+def test_table_query_rejects_having_without_aggregations() -> None:
+    dataset_id = _dataset_id()
+    resp = client.post(
+        f"/api/datasets/{dataset_id}/table-query",
+        json={
+            "groupBy": ["region"],
+            "having": [{"metric": "amount_total", "operator": ">", "value": 1000}],
+        },
+    )
+    assert resp.status_code == 400
+    assert "HAVING requires at least one aggregation" in resp.text
