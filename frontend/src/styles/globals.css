@@ -1,0 +1,219 @@
+@import "tailwindcss";
+
+/* ── Hex Dark Theme with Blue Accent ── */
+
+@theme {
+  --color-bg: #1a1d24;
+  --color-bg-deep: #14161b;
+  --color-surface: #252a36;
+  --color-surface-elevated: #303746;
+  --color-surface-hover: #3a4254;
+
+  --color-border: rgba(255, 255, 255, 0.17);
+  --color-border-strong: rgba(255, 255, 255, 0.3);
+  --color-border-active: rgba(96, 165, 250, 0.3);
+
+  --color-accent: #60a5fa;
+  --color-accent-hover: #93c5fd;
+  --color-accent-muted: rgba(96, 165, 250, 0.15);
+  --color-accent-dim: rgba(96, 165, 250, 0.08);
+
+  --color-text: #eef3fb;
+  --color-text-secondary: #b8c6da;
+  --color-text-muted: #8493aa;
+  --color-text-inverse: #1a1d24;
+
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-error: #f87171;
+
+  --font-sans: "Geist", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+}
+
+/* ── Base ── */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Scrollbar ── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* ── Selection ── */
+
+::selection {
+  background: var(--color-accent-muted);
+  color: var(--color-text);
+}
+
+/* ── Focus rings ── */
+
+:focus-visible {
+  outline: 1px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* ── Type badge colors ── */
+
+.type-badge-string {
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.12);
+}
+
+.type-badge-integer,
+.type-badge-float {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.12);
+}
+
+.type-badge-date {
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.12);
+}
+
+.type-badge-boolean {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+}
+
+/* ── Sparkline ── */
+
+.sparkline-bar {
+  background: rgba(147, 197, 253, 0.5);
+  transition: background 0.15s;
+}
+
+.sparkline-bar:hover {
+  background: rgba(147, 197, 253, 0.75);
+}
+
+/* ── Animations ── */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.25s ease-out;
+}
+
+.animate-slide-down {
+  animation: slideDown 0.2s ease-out;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.15s ease-out;
+}
+
+.gradient-border-active {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
+    linear-gradient(120deg, rgba(147, 197, 253, 0.75), rgba(96, 165, 250, 0.35), rgba(147, 197, 253, 0.75)) border-box;
+}
+
+.gradient-border-subtle {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
+    linear-gradient(120deg, rgba(147, 197, 253, 0.35), rgba(147, 197, 253, 0.08), rgba(147, 197, 253, 0.35)) border-box;
+}
+
+/* Flat gradient strokes for standard border utilities */
+:where(
+  [class~="border-border"],
+  [class~="border-border-strong"],
+  [class*="border-border/"],
+  [class*="border-border-strong/"]
+) {
+  border-color: transparent !important;
+  border-image-slice: 1;
+  --edge-grad: linear-gradient(
+    120deg,
+    rgba(125, 211, 252, 0.16),
+    rgba(96, 165, 250, 0.1),
+    rgba(125, 211, 252, 0.16)
+  );
+  border-image-source: var(--edge-grad);
+}
+
+:where([class~="border-border-strong"], [class*="border-border-strong/"]) {
+  --edge-grad: linear-gradient(
+    120deg,
+    rgba(125, 211, 252, 0.22),
+    rgba(96, 165, 250, 0.14),
+    rgba(125, 211, 252, 0.22)
+  );
+}
+
+/* Make stroke direction consistent by edge for cleaner grid lines */
+:where([class~="border-t"], [class~="border-b"]) {
+  --edge-grad: linear-gradient(
+    90deg,
+    rgba(125, 211, 252, 0.16),
+    rgba(96, 165, 250, 0.11),
+    rgba(125, 211, 252, 0.16)
+  );
+}
+
+:where([class~="border-l"], [class~="border-r"]) {
+  --edge-grad: linear-gradient(
+    180deg,
+    rgba(125, 211, 252, 0.16),
+    rgba(96, 165, 250, 0.11),
+    rgba(125, 211, 252, 0.16)
+  );
+}
