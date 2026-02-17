@@ -2,23 +2,20 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRunTableQuery } from '../api.ts'
 import { useAppStore } from '../store.ts'
 import type { AggregationSpec, Filter, HavingSpec, InvestigationCell, TableQueryResponse } from '../types.ts'
-
-const FILTER_OPS = ['=', '!=', '>', '<', '>=', '<=', 'contains', 'starts_with', 'is_null', 'is_not_null']
-const AGG_OPS = ['count', 'sum', 'avg', 'min', 'max'] as const
-const HAVING_OPS = ['=', '!=', '>', '<', '>=', '<='] as const
-const INPUT_CLASS = 'h-6 bg-surface-elevated border border-border-strong rounded px-1.5 text-[11px] text-text-secondary'
-const ACTION_CLASS = 'h-6 px-2 rounded border border-border-strong bg-surface text-[11px] text-text-secondary hover:text-text hover:border-accent transition-colors'
+import {
+  ACTION_CLASS,
+  AGG_OPS,
+  FILTER_OPS,
+  HAVING_OPS,
+  INPUT_CLASS,
+  QueryChip,
+  QueryToggle,
+  formatFilterOp,
+  getAggAlias,
+  isNullOp,
+} from './query-builder-shared.tsx'
 
 type ControlKey = 'filter' | 'analyze' | 'sort' | 'limit'
-
-function isNullOp(op: string) {
-  return op === 'is_null' || op === 'is_not_null'
-}
-
-function getAggAlias(agg: AggregationSpec): string {
-  if (typeof agg.as === 'string' && agg.as.trim()) return agg.as.trim()
-  return `${agg.op}_${agg.column.replace('*', 'all')}`
-}
 
 export function TableCell({ cell }: { cell: InvestigationCell }) {
   const datasets = useAppStore((s) => s.datasets)
@@ -199,35 +196,35 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
       </div>
 
       <div className="px-2.5 py-1 border-b border-border-strong bg-bg-deep flex items-center gap-1.5 text-[10px] font-mono flex-wrap">
-        <ControlToggle label="Filter" value={String(spec.filters.length)} active={activeControl === 'filter'} onClick={() => toggleControl('filter')} />
-        <ControlToggle
+        <QueryToggle label="Filter" value={String(spec.filters.length)} active={activeControl === 'filter'} onClick={() => toggleControl('filter')} />
+        <QueryToggle
           label="Analyze"
           value={`G${spec.groupBy.length} A${spec.aggregations.length} H${spec.having.length}`}
           active={activeControl === 'analyze'}
           onClick={() => toggleControl('analyze')}
         />
-        <ControlToggle label="Sort" value={String(spec.sort.length)} active={activeControl === 'sort'} onClick={() => toggleControl('sort')} />
-        <ControlToggle label="Limit" value={String(spec.limit ?? 200)} active={activeControl === 'limit'} onClick={() => toggleControl('limit')} />
+        <QueryToggle label="Sort" value={String(spec.sort.length)} active={activeControl === 'sort'} onClick={() => toggleControl('sort')} />
+        <QueryToggle label="Limit" value={String(spec.limit ?? 200)} active={activeControl === 'limit'} onClick={() => toggleControl('limit')} />
       </div>
 
       {(spec.filters.length > 0 || spec.groupBy.length > 0 || spec.aggregations.length > 0 || spec.having.length > 0 || spec.sort.length > 0) && (
         <div className="px-2.5 py-1 border-b border-border bg-bg-deep/80 flex items-center gap-1 flex-wrap">
           {spec.filters.map((f, idx) => (
-            <Chip
+            <QueryChip
               key={`f-${idx}`}
               label={`${f.column} ${formatFilterOp(f.operator)}${isNullOp(f.operator) ? '' : ` ${String(f.value)}`}`}
               onRemove={() => updateCell(cell.id, { tableSpec: { ...spec, filters: spec.filters.filter((_, i) => i !== idx) } })}
             />
           ))}
           {spec.groupBy.map((g) => (
-            <Chip
+            <QueryChip
               key={`g-${g}`}
               label={`group ${g}`}
               onRemove={() => updateCell(cell.id, { tableSpec: { ...spec, groupBy: spec.groupBy.filter((c) => c !== g) } })}
             />
           ))}
           {spec.aggregations.map((a, idx) => (
-            <Chip
+            <QueryChip
               key={`a-${idx}`}
               label={`${getAggAlias(a)}=${a.op}(${a.column})`}
               onRemove={() => {
@@ -244,14 +241,14 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
             />
           ))}
           {spec.having.map((h, idx) => (
-            <Chip
+            <QueryChip
               key={`h-${idx}`}
               label={`having ${h.metric} ${h.operator} ${String(h.value)}`}
               onRemove={() => updateCell(cell.id, { tableSpec: { ...spec, having: spec.having.filter((_, i) => i !== idx) } })}
             />
           ))}
           {spec.sort.map((s, idx) => (
-            <Chip
+            <QueryChip
               key={`s-${idx}`}
               label={`sort ${s.column} ${s.direction}`}
               onRemove={() => updateCell(cell.id, { tableSpec: { ...spec, sort: spec.sort.filter((_, i) => i !== idx) } })}
@@ -308,7 +305,7 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
                 <span className="text-text-muted font-mono text-[10px]">Agg</span>
                 <select
                   value={aggDraft.op}
-                  onChange={(e) => setAggDraft((s) => ({ ...s, op: e.target.value as typeof AGG_OPS[number] }))}
+                  onChange={(e) => setAggDraft((s) => ({ ...s, op: e.target.value as AggregationSpec['op'] }))}
                   className={INPUT_CLASS}
                 >
                   {AGG_OPS.map((op) => <option key={op} value={op}>{op}</option>)}
@@ -438,57 +435,5 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
         </div>
       )}
     </div>
-  )
-}
-
-function formatFilterOp(op: string) {
-  if (op === 'starts_with') return 'starts with'
-  if (op === 'is_null') return 'is null'
-  if (op === 'is_not_null') return 'is not null'
-  return op
-}
-
-function ControlToggle({
-  label,
-  value,
-  active,
-  onClick,
-}: {
-  label: string
-  value: string
-  active: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-1 py-0.5 rounded border transition-colors ${
-        active
-          ? 'bg-accent-dim border-accent/40 text-accent'
-          : 'bg-surface border-border text-text-muted hover:text-text-secondary'
-      }`}
-    >
-      {label} {value}
-    </button>
-  )
-}
-
-function Chip({ label, onRemove }: { label: string; onRemove?: () => void }) {
-  return (
-    <span className="inline-flex items-center gap-1 px-1 py-0.5 rounded text-[10px] bg-accent-dim text-accent font-mono">
-      {label}
-      {onRemove && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onRemove()
-          }}
-          className="text-accent/70 hover:text-accent"
-          aria-label={`Remove ${label}`}
-        >
-          x
-        </button>
-      )}
-    </span>
   )
 }

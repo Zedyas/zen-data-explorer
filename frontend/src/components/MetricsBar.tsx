@@ -8,7 +8,10 @@ export function MetricsBar() {
   const activeCellId = useAppStore((s) => s.activeCellId)
   const cells = useAppStore((s) => s.cells)
 
-  const activeCell = useMemo(() => cells.find((c) => c.id === activeCellId) ?? null, [cells, activeCellId])
+  const activeCell = useMemo(
+    () => cells.find((c) => c.id === activeCellId && c.datasetId === dataset?.id) ?? null,
+    [cells, activeCellId, dataset?.id],
+  )
   const activeCellResult = activeCell?.result as TableQueryResponse | null
 
   if (!dataset) return null

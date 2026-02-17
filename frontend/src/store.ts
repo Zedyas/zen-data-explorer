@@ -36,6 +36,19 @@ function resetOverviewState(dataset: Dataset | null) {
   }
 }
 
+function buildCompareState(datasetId: string | undefined, datasets: Dataset[]) {
+  const left = datasetId ?? datasets[0]?.id ?? null
+  const right = datasets.find((d) => d.id !== left)?.id ?? left
+  return {
+    leftDatasetId: left,
+    rightDatasetId: right,
+    leftSpec: defaultTableSpec(),
+    rightSpec: defaultTableSpec(),
+    leftResult: null,
+    rightResult: null,
+  }
+}
+
 interface AppState {
   datasets: Dataset[]
   activeDataset: Dataset | null
@@ -84,12 +97,23 @@ interface AppState {
   removeCell: (id: string) => void
 }
 
+function latestCellIdForDataset(cells: InvestigationCell[], datasetId: string | undefined): string | null {
+  if (!datasetId) return null
+  const scoped = cells.filter((c) => c.datasetId === datasetId)
+  return scoped.at(-1)?.id ?? null
+}
+
 export const useAppStore = create<AppState>((set) => ({
   datasets: [],
   activeDataset: null,
   setActiveDataset: (dataset) =>
     set((s) => {
-      if (!dataset) return resetOverviewState(null)
+      if (!dataset) {
+        return {
+          ...resetOverviewState(null),
+          activeCellId: null,
+        }
+      }
       const existing = s.datasets.find((d) => d.id === dataset.id)
       const datasets = existing
         ? s.datasets.map((d) => (d.id === dataset.id ? dataset : d))
@@ -97,26 +121,34 @@ export const useAppStore = create<AppState>((set) => ({
       return {
         datasets,
         ...resetOverviewState(dataset),
+        activeCellId: latestCellIdForDataset(s.cells, dataset.id),
       }
     }),
   switchDataset: (datasetId) =>
     set((s) => {
       const dataset = s.datasets.find((d) => d.id === datasetId) ?? null
       if (!dataset) return s
-      return resetOverviewState(dataset)
+      return {
+        ...resetOverviewState(dataset),
+        activeCellId: latestCellIdForDataset(s.cells, dataset.id),
+      }
     }),
   removeDataset: (datasetId) =>
     set((s) => {
       const datasets = s.datasets.filter((d) => d.id !== datasetId)
       const remainingCells = s.cells.filter((c) => c.datasetId !== datasetId)
-      const validCellIds = new Set(remainingCells.map((c) => c.id))
       const sanitizedCells = remainingCells.map((c) => {
         if (c.type !== 'compare' || !c.compare) return c
+        const leftDatasetId = c.compare.leftDatasetId === datasetId ? null : c.compare.leftDatasetId
+        const rightDatasetId = c.compare.rightDatasetId === datasetId ? null : c.compare.rightDatasetId
         return {
           ...c,
           compare: {
-            leftCellId: c.compare.leftCellId && validCellIds.has(c.compare.leftCellId) ? c.compare.leftCellId : null,
-            rightCellId: c.compare.rightCellId && validCellIds.has(c.compare.rightCellId) ? c.compare.rightCellId : null,
+            ...c.compare,
+            leftDatasetId,
+            rightDatasetId,
+            leftResult: leftDatasetId ? c.compare.leftResult : null,
+            rightResult: rightDatasetId ? c.compare.rightResult : null,
           },
         }
       })
@@ -130,9 +162,7 @@ export const useAppStore = create<AppState>((set) => ({
         datasets,
         ...base,
         cells: sanitizedCells,
-        activeCellId: sanitizedCells.some((c) => c.id === s.activeCellId)
-          ? s.activeCellId
-          : sanitizedCells.at(-1)?.id ?? null,
+        activeCellId: latestCellIdForDataset(sanitizedCells, activeDataset?.id),
       }
     }),
 
@@ -245,11 +275,11 @@ export const useAppStore = create<AppState>((set) => ({
               : type === 'python'
                 ? `Python ${s.cells.length + 1}`
                 : `Compare ${s.cells.length + 1}`,
-        datasetId: type === 'table' || type === 'sql' || type === 'python' ? activeDataset?.id : undefined,
+        datasetId: activeDataset?.id,
         tableSpec: type === 'table' ? (firstTableCell ? baseSpec : defaultTableSpec()) : undefined,
         sql: type === 'sql' ? 'SELECT * FROM data LIMIT 50' : undefined,
         python: type === 'python' ? 'df.head(50)' : undefined,
-        compare: type === 'compare' ? { leftCellId: null, rightCellId: null } : undefined,
+        compare: type === 'compare' ? buildCompareState(activeDataset?.id, s.datasets) : undefined,
         autoRun: type === 'table' ? firstTableCell : false,
         result: null,
         error: null,
@@ -269,16 +299,8 @@ export const useAppStore = create<AppState>((set) => ({
   removeCell: (id) =>
     set((s) => {
       const next = s.cells.filter((c) => c.id !== id)
-      const valid = new Set(next.map((c) => c.id))
       const sanitized = next.map((c) => {
-        if (c.type !== 'compare' || !c.compare) return c
-        return {
-          ...c,
-          compare: {
-            leftCellId: c.compare.leftCellId && valid.has(c.compare.leftCellId) ? c.compare.leftCellId : null,
-            rightCellId: c.compare.rightCellId && valid.has(c.compare.rightCellId) ? c.compare.rightCellId : null,
-          },
-        }
+        return c
       })
       return {
         cells: sanitized,

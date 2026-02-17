@@ -5,6 +5,7 @@ export function StatusBar() {
   const filters = useAppStore((s) => s.filters)
   const workspaceTab = useAppStore((s) => s.workspaceTab)
   const cells = useAppStore((s) => s.cells)
+  const visibleCellCount = dataset ? cells.filter((c) => c.datasetId === dataset.id).length : 0
 
   return (
     <div className="h-6 flex items-center justify-between px-3 border-t border-border bg-bg-deep text-[10px] text-text-muted shrink-0">
@@ -20,7 +21,7 @@ export function StatusBar() {
           <span className="font-mono text-accent">{filters.length} filter{filters.length !== 1 ? 's' : ''} active</span>
         )}
         <span className="font-mono">{workspaceTab}</span>
-        {cells.length > 0 && <span className="font-mono">{cells.length} cell{cells.length !== 1 ? 's' : ''}</span>}
+        {visibleCellCount > 0 && <span className="font-mono">{visibleCellCount} cell{visibleCellCount !== 1 ? 's' : ''}</span>}
       </div>
       <div className="font-mono">
         Zen Data Explorer

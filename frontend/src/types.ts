@@ -18,6 +18,7 @@ export interface Filter {
 export interface Dataset {
   id: string
   name: string
+  sourceType?: 'file' | 'database'
   rowCount: number
   columns: Column[]
 }
@@ -42,6 +43,7 @@ export interface SchemaResponse {
 export interface UploadResponse {
   id: string
   name: string
+  sourceType?: 'file' | 'database'
   rowCount: number
   columns: Column[]
 }
@@ -124,8 +126,12 @@ export interface InvestigationCell {
   sql?: string
   python?: string
   compare?: {
-    leftCellId: string | null
-    rightCellId: string | null
+    leftDatasetId: string | null
+    rightDatasetId: string | null
+    leftSpec: TableQuerySpec
+    rightSpec: TableQuerySpec
+    leftResult: TableQueryResponse | null
+    rightResult: TableQueryResponse | null
   }
   autoRun?: boolean
   result: QueryResponse | TableQueryResponse | null
