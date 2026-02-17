@@ -12,9 +12,10 @@ import {
   appendSort,
   applyLimitValue,
   ensureDraftColumn,
-  FILTER_OPS,
+  getFilterOpsForType,
   HAVING_OPS,
   INPUT_CLASS,
+  normalizeFilterOperator,
   QueryChip,
   QueryToggle,
   formatFilterOp,
@@ -82,8 +83,17 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
     setSortDraft((s) => ({ ...s, column: ensureDraftColumn(s.column, names) }))
   }, [columns])
 
+  useEffect(() => {
+    const type = columns.find((c) => c.name === filterDraft.column)?.type
+    setFilterDraft((s) => ({ ...s, operator: normalizeFilterOperator(s.operator, type) }))
+  }, [columns, filterDraft.column])
+
   const result = cell.result as TableQueryResponse | null
   const canRun = useMemo(() => !!dataset, [dataset])
+  const filterOps = useMemo(
+    () => getFilterOpsForType(columns.find((c) => c.name === filterDraft.column)?.type),
+    [columns, filterDraft.column],
+  )
 
   const runCell = useCallback(() => {
     if (!canRun) return
@@ -248,7 +258,15 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
             <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
               <select
                 value={filterDraft.column}
-                onChange={(e) => setFilterDraft((s) => ({ ...s, column: e.target.value }))}
+                onChange={(e) => {
+                  const nextColumn = e.target.value
+                  const nextType = columns.find((c) => c.name === nextColumn)?.type
+                  setFilterDraft((s) => ({
+                    ...s,
+                    column: nextColumn,
+                    operator: normalizeFilterOperator(s.operator, nextType),
+                  }))
+                }}
                 className={INPUT_CLASS}
               >
                 {columns.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
@@ -258,7 +276,7 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
                 onChange={(e) => setFilterDraft((s) => ({ ...s, operator: e.target.value }))}
                 className={INPUT_CLASS}
               >
-                {FILTER_OPS.map((op) => <option key={op} value={op}>{formatFilterOp(op)}</option>)}
+                {filterOps.map((op) => <option key={op} value={op}>{formatFilterOp(op)}</option>)}
               </select>
               {!isNullOp(filterDraft.operator) && (
                 <input

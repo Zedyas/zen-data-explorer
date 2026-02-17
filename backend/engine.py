@@ -94,7 +94,15 @@ DUCKDB_TYPE_MAP: dict[str, str] = {
 }
 
 FILTER_OPERATORS_BY_TYPE: dict[str, set[str]] = {
-    "string": {"=", "!=", "contains", "starts_with", "is_null", "is_not_null"},
+    "string": {
+        "=",
+        "!=",
+        "contains",
+        "starts_with",
+        "ends_with",
+        "is_null",
+        "is_not_null",
+    },
     "integer": {"=", "!=", ">", "<", ">=", "<=", "is_null", "is_not_null"},
     "float": {"=", "!=", ">", "<", ">=", "<=", "is_null", "is_not_null"},
     "date": {"=", ">", "<", ">=", "<=", "is_null", "is_not_null"},
@@ -1110,6 +1118,8 @@ class DuckDBEngine(Engine):
                 parts.append(
                     f"[df[{col!r}].astype(str).str.startswith({val}, na=False)]"
                 )
+            elif op == "ends_with":
+                parts.append(f"[df[{col!r}].astype(str).str.endswith({val}, na=False)]")
 
         if aggregations:
             agg_map = {
@@ -1236,6 +1246,8 @@ class DuckDBEngine(Engine):
             return f"{col_sql} ILIKE ?", [f"%{value}%"]
         if op == "starts_with":
             return f"{col_sql} ILIKE ?", [f"{value}%"]
+        if op == "ends_with":
+            return f"{col_sql} ILIKE ?", [f"%{value}"]
 
         raise ValueError(f"Unsupported operator '{op}'")
 

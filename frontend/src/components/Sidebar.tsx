@@ -4,6 +4,7 @@ import {
   CodeXmlIcon,
   CompareIcon,
   DynamicIcon,
+  LabIcon,
   OverviewDatabaseIcon,
   OverviewFileIcon,
   TableIcon,
@@ -53,7 +54,7 @@ export function Sidebar() {
   }
 
   return (
-    <div className="w-64 border-r border-border-strong bg-bg-deep flex flex-col shrink-0">
+    <div className="w-64 border-r border-border-strong panel-deep flex flex-col shrink-0">
       <div className="px-3 py-2 border-b border-border-strong">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Instances</span>
       </div>
@@ -127,6 +128,8 @@ export function Sidebar() {
                           ? <CompareIcon />
                           : cell.type === 'table'
                             ? <TableIcon />
+                            : cell.type === 'lab'
+                              ? <LabIcon />
                             : cell.type === 'python'
                               ? <CodeIcon />
                               : <CodeXmlIcon />}

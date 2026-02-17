@@ -10,21 +10,21 @@ import type { InvestigationCell, QueryResponse } from '../types.ts'
 
 const darkTheme = EditorView.theme({
   '&': {
-    backgroundColor: '#22262e',
-    color: '#e2e8f0',
+    backgroundColor: '#121b22',
+    color: '#dce8f5',
     fontSize: '13px',
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   },
   '.cm-content': {
-    caretColor: '#60a5fa',
+    caretColor: '#2dd4bf',
     padding: '8px 0',
   },
-  '.cm-cursor': { borderLeftColor: '#60a5fa' },
-  '.cm-activeLine': { backgroundColor: 'rgba(96, 165, 250, 0.06)' },
-  '.cm-selectionBackground': { backgroundColor: 'rgba(96, 165, 250, 0.2) !important' },
+  '.cm-cursor': { borderLeftColor: '#2dd4bf' },
+  '.cm-activeLine': { backgroundColor: 'rgba(45, 212, 191, 0.04)' },
+  '.cm-selectionBackground': { backgroundColor: 'rgba(45, 212, 191, 0.15) !important' },
   '.cm-gutters': {
-    backgroundColor: '#1a1d24',
-    color: '#64748b',
+    backgroundColor: '#0d1419',
+    color: '#4d6070',
     border: 'none',
     minWidth: '32px',
   },

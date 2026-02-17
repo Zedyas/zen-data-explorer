@@ -4,6 +4,7 @@ import {
   CodeXml,
   DatabaseZap,
   FileSpreadsheet,
+  FlaskConical,
   GitCompareArrows,
   Table2,
 } from 'lucide-react'
@@ -42,4 +43,8 @@ export function CodeXmlIcon({ className }: IconProps) {
 
 export function CompareIcon({ className }: IconProps) {
   return <GitCompareArrows size={SIZE} strokeWidth={STROKE} className={className ?? DEFAULT_CLASS} />
+}
+
+export function LabIcon({ className }: IconProps) {
+  return <FlaskConical size={SIZE} strokeWidth={STROKE} className={className ?? DEFAULT_CLASS} />
 }
