@@ -144,3 +144,4 @@ Why tail profile exists:
 
 - This project is intentionally single-user and local-only.
 - Notebook cells are designed to keep analysis reproducible without forcing code-first workflows.
+- Planned Lab follow-up (when reintegrated): add a Python code reveal panel similar to table-cell generated code.
