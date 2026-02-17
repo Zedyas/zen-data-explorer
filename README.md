@@ -21,7 +21,7 @@ No cloud service. No multi-user complexity. Runs on your machine.
   - SQL cells
   - Python text cells (display/edit)
   - Compare cells (left/right dataset builders with independent modifiers)
-  - Lab cells (missingness, validation, key diagnostics, outlier analysis, relationships, univariate explorer, sampling diagnostics, parse/cast readiness, sentinel audit, freshness/runout over selected table-cell result context)
+  - Lab cells (scaffold on `master`; full Lab implementation is parked in branch `5-lab-feature-full`)
 - CSV export of filtered/sorted results
 
 ## Tech Stack
