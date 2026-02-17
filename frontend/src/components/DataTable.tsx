@@ -243,13 +243,16 @@ export function DataTable() {
       {/* Pagination bar */}
       <div className="h-8 flex items-center justify-between px-3 border-t border-border-strong bg-surface-elevated shrink-0 text-xs">
         <div className="text-text-muted">
+          <span>
+            Showing <span className="font-mono text-text-secondary">{rows.length.toLocaleString()}</span>
+            {' / '}
+            <span className="font-mono text-text-secondary">{filteredRows.toLocaleString()}</span> rows
+          </span>
           {filteredRows !== totalRows && (
             <span>
-              Showing <span className="font-mono text-text-secondary">{filteredRows.toLocaleString()}</span>
-              {' '}of{' '}
+              {' '}(<span className="font-mono text-text-secondary">{totalRows.toLocaleString()}</span> total)
             </span>
           )}
-          <span className="font-mono text-text-secondary">{totalRows.toLocaleString()}</span> rows
           {isFetching && !isLoading && (
             <span className="ml-2 text-accent">updating...</span>
           )}

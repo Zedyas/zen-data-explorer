@@ -44,7 +44,6 @@ class Engine(ABC):
         self,
         dataset_id: str,
         column: str,
-        sample_size: int = 10_000,
     ) -> dict:
         """Profile a single column (stats, histogram, top values)."""
 
@@ -103,6 +102,7 @@ FILTER_OPERATORS_BY_TYPE: dict[str, set[str]] = {
 }
 
 HAVING_OPERATORS = {"=", "!=", ">", "<", ">=", "<="}
+PROFILE_FULL_ROW_LIMIT = 1_000_000
 
 
 def map_duckdb_type(duckdb_type: str) -> str:
@@ -397,7 +397,6 @@ class DuckDBEngine(Engine):
         self,
         dataset_id: str,
         column: str,
-        sample_size: int = 10_000,
     ) -> dict:
         table = self._get_table(dataset_id)
         table_sql = self._quote_ident(table)
@@ -412,10 +411,11 @@ class DuckDBEngine(Engine):
             0
         ]
 
-        # Sample if dataset is large
-        sampled = sample_size > 0 and total_rows > sample_size
+        # Auto-profile full data up to the configured limit.
+        sampled = total_rows > PROFILE_FULL_ROW_LIMIT
+        profile_size = PROFILE_FULL_ROW_LIMIT if sampled else total_rows
         if sampled:
-            sample_sql = f"(SELECT * FROM {table_sql} USING SAMPLE {sample_size} ROWS)"
+            sample_sql = f"(SELECT * FROM {table_sql} USING SAMPLE {profile_size} ROWS)"
         else:
             sample_sql = table_sql
 
@@ -432,28 +432,72 @@ class DuckDBEngine(Engine):
             "type": app_type,
             "totalRows": total_rows,
             "sampled": sampled,
-            "sampleSize": sample_size if sampled else total_rows,
+            "sampleSize": profile_size,
             "nonNullCount": base[1],
             "nullCount": base[2],
             "uniqueCount": base[3],
         }
 
+        dominant_value: str | None = None
+        dominant_count = 0
+
         if app_type in ("integer", "float"):
-            result["stats"] = self._profile_numeric(sample_sql, col_sql)
+            numeric_stats = self._profile_numeric(sample_sql, col_sql)
+            if numeric_stats:
+                numeric_stats.update(
+                    self._profile_numeric_quality(
+                        sample_sql, col_sql, base[1], numeric_stats
+                    )
+                )
+            result["stats"] = numeric_stats
             result["histogram"] = self._profile_histogram_numeric(sample_sql, col_sql)
+            dom = self._profile_dominant_value(sample_sql, col_sql)
+            if dom:
+                dominant_value = dom["value"]
+                dominant_count = dom["count"]
         elif app_type == "string":
-            result["topValues"] = self._profile_top_values(sample_sql, col_sql)
+            top_values = self._profile_top_values(sample_sql, col_sql)
+            result["topValues"] = top_values
+            dom = self._profile_dominant_value(sample_sql, col_sql)
+            if dom:
+                dominant_value = dom["value"]
+                dominant_count = dom["count"]
+
             lengths = self.conn.execute(
                 f"SELECT MIN(LENGTH({col_sql})), MAX(LENGTH({col_sql})), "
-                f"ROUND(AVG(LENGTH({col_sql})), 1) "
+                f"MEDIAN(LENGTH({col_sql})) "
                 f"FROM {sample_sql} WHERE {col_sql} IS NOT NULL"
             ).fetchone()
+            string_quality = self._profile_string_quality(sample_sql, col_sql, base[1])
             if lengths and lengths[0] is not None:
                 result["stats"] = {
                     "minLength": int(lengths[0]),
                     "maxLength": int(lengths[1]),
-                    "avgLength": float(lengths[2]),
+                    "medianLength": self._safe_number(lengths[2]),
                 }
+                result["stats"].update(string_quality)
+            elif string_quality:
+                result["stats"] = string_quality
+
+            pattern_classes, distinct_pattern_count = self._profile_string_patterns(
+                sample_sql, col_sql
+            )
+            result["patternClasses"] = pattern_classes
+            if "stats" not in result:
+                result["stats"] = {}
+            result["stats"]["distinctPatternCount"] = distinct_pattern_count
+
+            top_10_share_pct = 0.0
+            if base[1] > 0 and top_values:
+                top_10_total = sum(v["count"] for v in top_values)
+                top_10_share_pct = (top_10_total / base[1]) * 100
+            result["top10CoveragePct"] = round(top_10_share_pct, 2)
+            if top_10_share_pct >= 70:
+                result["tailProfile"] = "low"
+            elif top_10_share_pct >= 40:
+                result["tailProfile"] = "medium"
+            else:
+                result["tailProfile"] = "high"
         elif app_type == "date":
             date_stats = self.conn.execute(
                 f"SELECT MIN({col_sql}), MAX({col_sql}) "
@@ -464,15 +508,37 @@ class DuckDBEngine(Engine):
                     "min": str(date_stats[0]),
                     "max": str(date_stats[1]),
                 }
+                result["stats"].update(self._profile_date_gaps(sample_sql, col_sql))
             result["histogram"] = self._profile_histogram_date(sample_sql, col_sql)
+            dom = self._profile_dominant_value(sample_sql, col_sql)
+            if dom:
+                dominant_value = dom["value"]
+                dominant_count = dom["count"]
         elif app_type == "boolean":
-            bool_counts = self.conn.execute(
-                f"SELECT {col_sql}, COUNT(*) FROM {sample_sql} "
-                f"WHERE {col_sql} IS NOT NULL GROUP BY {col_sql} ORDER BY {col_sql}"
-            ).fetchall()
-            result["topValues"] = [
-                {"value": str(r[0]), "count": r[1]} for r in bool_counts
-            ]
+            bool_stats = self._profile_boolean_split(sample_sql, col_sql, profile_size)
+            result["stats"] = bool_stats
+            true_count = int(bool_stats.get("trueCount") or 0)
+            false_count = int(bool_stats.get("falseCount") or 0)
+            if true_count == false_count:
+                dominant_value = None
+                dominant_count = true_count
+            elif true_count > false_count:
+                dominant_value = "true"
+                dominant_count = true_count
+            else:
+                dominant_value = "false"
+                dominant_count = false_count
+
+        if base[1] > 0 and dominant_count > 0:
+            if dominant_value is None:
+                result["dominantValue"] = "none"
+                result["dominantValueCount"] = dominant_count
+            else:
+                result["dominantValue"] = dominant_value
+                result["dominantValueCount"] = dominant_count
+                result["dominantValueSharePct"] = round(
+                    (dominant_count / base[1]) * 100, 2
+                )
 
         return result
 
@@ -553,6 +619,181 @@ class DuckDBEngine(Engine):
             [limit],
         ).fetchall()
         return [{"value": str(r[0]), "count": r[1]} for r in rows]
+
+    def _profile_dominant_value(self, source_sql: str, col_sql: str) -> dict | None:
+        count_rows = self.conn.execute(
+            f"SELECT COUNT(*) AS cnt FROM {source_sql} "
+            f"WHERE {col_sql} IS NOT NULL GROUP BY {col_sql} "
+            f"ORDER BY cnt DESC LIMIT 2"
+        ).fetchall()
+        if not count_rows:
+            return None
+        if len(count_rows) > 1 and int(count_rows[0][0]) == int(count_rows[1][0]):
+            return {"value": None, "count": int(count_rows[0][0])}
+
+        row = self.conn.execute(
+            f"SELECT {col_sql}, COUNT(*) AS cnt FROM {source_sql} "
+            f"WHERE {col_sql} IS NOT NULL GROUP BY {col_sql} "
+            f"ORDER BY cnt DESC, {col_sql} ASC LIMIT 1"
+        ).fetchone()
+        if not row:
+            return None
+        return {"value": str(row[0]), "count": int(row[1])}
+
+    def _profile_numeric_quality(
+        self,
+        source_sql: str,
+        col_sql: str,
+        non_null_count: int,
+        numeric_stats: dict[str, Any],
+    ) -> dict[str, Any]:
+        if non_null_count <= 0:
+            return {}
+
+        counts = self.conn.execute(
+            f"SELECT "
+            f"COUNT(*) FILTER (WHERE {col_sql} = 0), "
+            f"COUNT(*) FILTER (WHERE {col_sql} < 0) "
+            f"FROM {source_sql} WHERE {col_sql} IS NOT NULL"
+        ).fetchone()
+        zero_count = int(counts[0]) if counts else 0
+        neg_count = int(counts[1]) if counts else 0
+
+        p25 = numeric_stats.get("p25")
+        p75 = numeric_stats.get("p75")
+        outlier_rate_pct: float | None = None
+        if isinstance(p25, (int, float)) and isinstance(p75, (int, float)):
+            iqr = float(p75) - float(p25)
+            low = float(p25) - 1.5 * iqr
+            high = float(p75) + 1.5 * iqr
+            outlier_row = self.conn.execute(
+                f"SELECT COUNT(*) FROM {source_sql} "
+                f"WHERE {col_sql} IS NOT NULL AND ({col_sql} < ? OR {col_sql} > ?)",
+                [low, high],
+            ).fetchone()
+            outlier_count = int(outlier_row[0]) if outlier_row else 0
+            outlier_rate_pct = round((outlier_count / non_null_count) * 100, 2)
+
+        return {
+            "zeroRatePct": round((zero_count / non_null_count) * 100, 2),
+            "negativeRatePct": round((neg_count / non_null_count) * 100, 2),
+            "outlierRatePct": outlier_rate_pct,
+        }
+
+    def _profile_date_gaps(self, source_sql: str, col_sql: str) -> dict[str, Any]:
+        span_row = self.conn.execute(
+            f"SELECT "
+            f"DATEDIFF('day', MIN({col_sql}::DATE), MAX({col_sql}::DATE)) + 1, "
+            f"COUNT(DISTINCT {col_sql}::DATE) "
+            f"FROM {source_sql} WHERE {col_sql} IS NOT NULL"
+        ).fetchone()
+        if not span_row or span_row[0] is None:
+            return {}
+
+        span_days = int(span_row[0])
+        distinct_days = int(span_row[1])
+        missing_days = max(0, span_days - distinct_days)
+
+        gap_row = self.conn.execute(
+            f"WITH ordered_days AS ("
+            f"  SELECT DISTINCT {col_sql}::DATE AS d "
+            f"  FROM {source_sql} WHERE {col_sql} IS NOT NULL"
+            f"), gaps AS ("
+            f"  SELECT DATEDIFF('day', LAG(d) OVER (ORDER BY d), d) - 1 AS gap_days "
+            f"  FROM ordered_days"
+            f") "
+            f"SELECT COALESCE(MAX(gap_days), 0) FROM gaps"
+        ).fetchone()
+        largest_gap_days = int(gap_row[0]) if gap_row else 0
+
+        return {
+            "missingPeriodDays": missing_days,
+            "largestGapDays": max(0, largest_gap_days),
+        }
+
+    def _profile_string_quality(
+        self, source_sql: str, col_sql: str, non_null_count: int
+    ) -> dict[str, Any]:
+        if non_null_count <= 0:
+            return {}
+
+        row = self.conn.execute(
+            f"SELECT COUNT(*) "
+            f"FROM {source_sql} "
+            f"WHERE {col_sql} IS NOT NULL AND LENGTH(TRIM(CAST({col_sql} AS VARCHAR))) = 0"
+        ).fetchone()
+        blank_count = int(row[0]) if row else 0
+        return {
+            "blankWhitespaceCount": blank_count,
+            "blankWhitespacePct": round((blank_count / non_null_count) * 100, 2),
+        }
+
+    def _profile_string_patterns(
+        self, source_sql: str, col_sql: str
+    ) -> tuple[list[dict[str, Any]], int]:
+        class_rows = self.conn.execute(
+            f"WITH vals AS ("
+            f"  SELECT TRIM(CAST({col_sql} AS VARCHAR)) AS v "
+            f"  FROM {source_sql} "
+            f"  WHERE {col_sql} IS NOT NULL AND LENGTH(TRIM(CAST({col_sql} AS VARCHAR))) > 0"
+            f"), classes AS ("
+            f"  SELECT CASE "
+            f"    WHEN REGEXP_MATCHES(LOWER(v), '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') THEN 'uuid' "
+            f"    WHEN REGEXP_MATCHES(v, '^[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{(2,)}$') THEN 'email' "
+            f"    WHEN REGEXP_MATCHES(v, '^[0-9]+$') THEN 'numeric-only' "
+            f"    WHEN REGEXP_MATCHES(v, '[0-9]') AND REGEXP_MATCHES(v, '[A-Za-z]') AND REGEXP_MATCHES(v, '^[A-Za-z0-9_\\-]+$') THEN 'code-like' "
+            f"    ELSE 'free-text' "
+            f"  END AS cls "
+            f"  FROM vals"
+            f") "
+            f"SELECT cls, COUNT(*) AS cnt FROM classes GROUP BY cls ORDER BY cnt DESC LIMIT 5"
+        ).fetchall()
+
+        total = sum(int(r[1]) for r in class_rows)
+        classes = [
+            {
+                "label": str(r[0]),
+                "count": int(r[1]),
+                "sharePct": round((int(r[1]) / total) * 100, 2) if total > 0 else 0.0,
+            }
+            for r in class_rows
+        ]
+
+        pattern_count_row = self.conn.execute(
+            f"WITH vals AS ("
+            f"  SELECT TRIM(CAST({col_sql} AS VARCHAR)) AS v "
+            f"  FROM {source_sql} "
+            f"  WHERE {col_sql} IS NOT NULL AND LENGTH(TRIM(CAST({col_sql} AS VARCHAR))) > 0"
+            f") "
+            f"SELECT COUNT(DISTINCT REGEXP_REPLACE(REGEXP_REPLACE(v, '[A-Za-z]', 'A', 'g'), '[0-9]', '9', 'g')) "
+            f"FROM vals"
+        ).fetchone()
+        distinct_pattern_count = int(pattern_count_row[0]) if pattern_count_row else 0
+
+        return classes, distinct_pattern_count
+
+    def _profile_boolean_split(
+        self, source_sql: str, col_sql: str, total_profiled_rows: int
+    ) -> dict[str, Any]:
+        row = self.conn.execute(
+            f"SELECT "
+            f"COUNT(*) FILTER (WHERE {col_sql} = TRUE), "
+            f"COUNT(*) FILTER (WHERE {col_sql} = FALSE), "
+            f"COUNT(*) FILTER (WHERE {col_sql} IS NULL) "
+            f"FROM {source_sql}"
+        ).fetchone()
+        true_count = int(row[0]) if row else 0
+        false_count = int(row[1]) if row else 0
+        null_count = int(row[2]) if row else 0
+        denom = max(1, int(total_profiled_rows))
+        return {
+            "trueCount": true_count,
+            "falseCount": false_count,
+            "nullCount": null_count,
+            "trueSharePct": round((true_count / denom) * 100, 2),
+            "falseSharePct": round((false_count / denom) * 100, 2),
+            "nullSharePct": round((null_count / denom) * 100, 2),
+        }
 
     def _safe_number(self, val: Any) -> float | int | None:
         if val is None:

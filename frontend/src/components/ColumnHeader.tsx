@@ -45,6 +45,11 @@ export function ColumnHeader({ column, sparkline, onProfileClick }: ColumnHeader
   const nullPct = column.totalCount > 0
     ? ((column.nullCount / column.totalCount) * 100)
     : 0
+  const nullToneClass = nullPct >= 25
+    ? 'text-error'
+    : nullPct >= 10
+      ? 'text-warning'
+      : 'text-text-muted'
 
   return (
     <div className="w-full text-left group select-none">
@@ -73,15 +78,9 @@ export function ColumnHeader({ column, sparkline, onProfileClick }: ColumnHeader
           <span className={`type-badge-${column.type} px-1 py-px rounded text-[9px] font-mono leading-none`}>
             {TYPE_LABELS[column.type] ?? column.type}
           </span>
-          {nullPct > 0 ? (
-            <span className={`text-[9px] font-mono ${nullPct > 5 ? 'text-warning' : 'text-text-muted'}`}>
-              {nullPct.toFixed(1)}% null
-            </span>
-          ) : (
-            <span className="text-[9px] font-mono text-success/60">
-              0% null
-            </span>
-          )}
+          <span className={`text-[9px] font-mono ${nullToneClass}`}>
+            {nullPct.toFixed(1)}% null
+          </span>
           {column.uniqueCount != null && (
             <span className="text-[9px] font-mono text-text-muted">
               {column.uniqueCount.toLocaleString()} uniq

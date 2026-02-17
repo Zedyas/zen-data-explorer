@@ -59,9 +59,15 @@ export interface ProfileResponse {
   nonNullCount: number
   nullCount: number
   uniqueCount: number
+  dominantValue?: string | null
+  dominantValueCount?: number
+  dominantValueSharePct?: number
   stats?: Record<string, number | null>
   histogram?: { bin?: number; low?: number; high?: number; label?: string; count: number }[]
   topValues?: { value: string; count: number }[]
+  patternClasses?: { label: string; count: number; sharePct: number }[]
+  top10CoveragePct?: number
+  tailProfile?: 'low' | 'medium' | 'high'
 }
 
 export interface QueryResponse {
@@ -80,6 +86,8 @@ export interface SqlCell {
 }
 
 export type WorkspaceTab = 'overview' | 'dynamic'
+
+export type NotebookView = 'insights' | 'transformations'
 
 export type CellType = 'table' | 'sql' | 'python' | 'compare'
 

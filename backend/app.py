@@ -136,10 +136,9 @@ async def get_page(
 async def profile_column(
     dataset_id: str,
     column: str,
-    sample_size: int = Query(10000, ge=0, le=1_000_000),
 ):
     try:
-        return engine.profile_column(dataset_id, column, sample_size)
+        return engine.profile_column(dataset_id, column)
     except ValueError as e:
         if "not found" in str(e).lower():
             raise HTTPException(404, str(e))
