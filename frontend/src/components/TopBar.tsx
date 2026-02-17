@@ -44,7 +44,7 @@ export function TopBar() {
   }
 
   return (
-    <div className="h-11 flex items-center gap-3 px-3 border-b border-border bg-surface shrink-0">
+    <div className="h-9 flex items-center gap-3 px-3 border-b border-border panel-surface shrink-0">
       {/* Sidebar toggle */}
       <button
         onClick={toggleSidebar}

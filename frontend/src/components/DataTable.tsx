@@ -13,7 +13,7 @@ import { ProfilePopover } from './ProfilePopover.tsx'
 import { ColumnMenu } from './ColumnMenu.tsx'
 import type { Column } from '../types.ts'
 
-const ROW_HEIGHT = 32
+const ROW_HEIGHT = 28
 
 export function DataTable() {
   const dataset = useAppStore((s) => s.activeDataset)
@@ -147,12 +147,12 @@ export function DataTable() {
           {/* Header */}
           <thead className="sticky top-0 z-10">
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="bg-surface-elevated border-b border-border-strong">
+              <tr key={headerGroup.id} className="panel-surface-elevated border-b border-border-strong">
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
                     data-col={header.column.id}
-                    className="relative px-3 py-2 text-left align-top border-r border-border-strong last:border-r-0"
+                    className="relative px-3 py-2 text-left align-top table-col-sep last:border-r-0"
                     style={{ width: header.getSize() }}
                     onContextMenu={(e) => {
                       const colId = header.column.id
@@ -200,7 +200,7 @@ export function DataTable() {
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
-                      className="px-3 py-0 border-r border-border/50 last:border-r-0 overflow-hidden"
+                      className="px-3 py-0 table-col-sep last:border-r-0 overflow-hidden"
                       style={{ width: cell.column.getSize(), maxWidth: cell.column.getSize() }}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -241,7 +241,7 @@ export function DataTable() {
       </div>
 
       {/* Pagination bar */}
-      <div className="h-8 flex items-center justify-between px-3 border-t border-border-strong bg-surface-elevated shrink-0 text-xs">
+      <div className="h-8 flex items-center justify-between px-3 border-t border-border-strong panel-surface-elevated shrink-0 text-xs">
         <div className="text-text-muted">
           <span>
             Showing <span className="font-mono text-text-secondary">{rows.length.toLocaleString()}</span>

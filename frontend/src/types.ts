@@ -89,7 +89,19 @@ export type WorkspaceTab = 'overview' | 'dynamic'
 
 export type NotebookView = 'insights' | 'transformations'
 
-export type CellType = 'table' | 'sql' | 'python' | 'compare'
+export type LabModule =
+  | 'missingness'
+  | 'validation'
+  | 'keys'
+  | 'outliers'
+  | 'relationships'
+  | 'univariate'
+  | 'sampling'
+  | 'parse_cast'
+  | 'sentinel'
+  | 'freshness'
+
+export type CellType = 'table' | 'sql' | 'python' | 'compare' | 'lab'
 
 export interface AggregationSpec {
   op: 'count' | 'sum' | 'avg' | 'min' | 'max'
@@ -144,6 +156,16 @@ export interface InvestigationCell {
   compareUi?: {
     showControls: boolean
     syncScroll: boolean
+  }
+  lab?: {
+    sourceCellId: string | null
+    activeModule: LabModule
+    maxColumns: number
+    nullThresholdPct: number
+    uniqueFloorPct: number
+    outlierMetric?: string
+    outlierPercentile?: number
+    modules?: LabModule[]
   }
   autoRun?: boolean
   result: QueryResponse | TableQueryResponse | null

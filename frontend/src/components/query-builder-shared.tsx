@@ -1,6 +1,12 @@
-import type { AggregationSpec, Filter, HavingSpec, TableQuerySpec } from '../types.ts'
+import type { AggregationSpec, ColumnType, Filter, HavingSpec, TableQuerySpec } from '../types.ts'
 
-export const FILTER_OPS = ['=', '!=', '>', '<', '>=', '<=', 'contains', 'starts_with', 'is_null', 'is_not_null'] as const
+export const FILTER_OPS_BY_TYPE: Record<ColumnType, readonly string[]> = {
+  string: ['=', '!=', 'contains', 'starts_with', 'ends_with', 'is_null', 'is_not_null'],
+  integer: ['=', '!=', '>', '<', '>=', '<=', 'is_null', 'is_not_null'],
+  float: ['=', '!=', '>', '<', '>=', '<=', 'is_null', 'is_not_null'],
+  date: ['=', '>', '<', '>=', '<=', 'is_null', 'is_not_null'],
+  boolean: ['=', '!=', 'is_null', 'is_not_null'],
+}
 export const AGG_OPS: ReadonlyArray<AggregationSpec['op']> = ['count', 'sum', 'avg', 'min', 'max']
 export const HAVING_OPS: ReadonlyArray<'=' | '!=' | '>' | '<' | '>=' | '<='> = ['=', '!=', '>', '<', '>=', '<=']
 
@@ -18,9 +24,20 @@ export function getAggAlias(agg: AggregationSpec): string {
 
 export function formatFilterOp(op: string) {
   if (op === 'starts_with') return 'starts with'
+  if (op === 'ends_with') return 'ends with'
   if (op === 'is_null') return 'is null'
   if (op === 'is_not_null') return 'is not null'
   return op
+}
+
+export function getFilterOpsForType(type: ColumnType | undefined): readonly string[] {
+  if (!type) return FILTER_OPS_BY_TYPE.string
+  return FILTER_OPS_BY_TYPE[type]
+}
+
+export function normalizeFilterOperator(op: string, type: ColumnType | undefined): string {
+  const ops = getFilterOpsForType(type)
+  return ops.includes(op) ? op : ops[0]
 }
 
 export function ensureDraftColumn(current: string, columns: string[]): string {

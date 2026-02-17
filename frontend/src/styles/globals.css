@@ -1,29 +1,29 @@
 @import "tailwindcss";
 
-/* ── Hex Dark Theme with Blue Accent ── */
+/* ── Hex Dark + Teal Accent ── */
 
 @theme {
-  --color-bg: #1a1d24;
-  --color-bg-deep: #14161b;
-  --color-surface: #252a36;
-  --color-surface-elevated: #303746;
-  --color-surface-hover: #3a4254;
+  --color-bg: #0d1419;
+  --color-bg-deep: #080c10;
+  --color-surface: #131d24;
+  --color-surface-elevated: #19262f;
+  --color-surface-hover: #1e2e38;
 
-  --color-border: rgba(255, 255, 255, 0.17);
-  --color-border-strong: rgba(255, 255, 255, 0.3);
-  --color-border-active: rgba(96, 165, 250, 0.3);
+  --color-border: rgba(255, 255, 255, 0.09);
+  --color-border-strong: rgba(255, 255, 255, 0.14);
+  --color-border-active: rgba(45, 212, 191, 0.35);
 
-  --color-accent: #60a5fa;
-  --color-accent-hover: #93c5fd;
-  --color-accent-muted: rgba(96, 165, 250, 0.15);
-  --color-accent-dim: rgba(96, 165, 250, 0.08);
+  --color-accent: #2dd4bf;
+  --color-accent-hover: #5eead4;
+  --color-accent-muted: rgba(45, 212, 191, 0.12);
+  --color-accent-dim: rgba(45, 212, 191, 0.07);
 
-  --color-text: #eef3fb;
-  --color-text-secondary: #b8c6da;
-  --color-text-muted: #8493aa;
-  --color-text-inverse: #1a1d24;
+  --color-text: #dce8f5;
+  --color-text-secondary: #7c90ab;
+  --color-text-muted: #4d6070;
+  --color-text-inverse: #0d1419;
 
-  --color-success: #4ade80;
+  --color-success: #34d399;
   --color-warning: #fbbf24;
   --color-error: #f87171;
 
@@ -44,12 +44,40 @@ html {
 body {
   margin: 0;
   font-family: var(--font-sans);
-  background: var(--color-bg);
+  /* Very subtle blue-teal sweep across the canvas */
+  background: linear-gradient(155deg, #09101a 0%, #0d1419 50%, #0c1318 100%);
+  background-attachment: fixed;
   color: var(--color-text);
   font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Subtle gradient surfaces ──
+   Apply to structural panels for depth without distraction.
+── */
+
+/* TopBar, FilterToolbar, dropdowns */
+.panel-surface {
+  background: linear-gradient(160deg, #151f29 0%, #131d24 55%, #121b22 100%);
+}
+
+/* Table header, pagination bar, cell canvas toolbar */
+.panel-surface-elevated {
+  background: linear-gradient(160deg, #1c2a36 0%, #19262f 55%, #172330 100%);
+}
+
+/* Sidebar, StatusBar — deepest layer */
+.panel-deep {
+  background: linear-gradient(175deg, #07090e 0%, #080c10 65%, #090f15 100%);
+}
+
+/* ── Table column separator ──
+   More visible than the general border token — gives the grid structure.
+── */
+.table-col-sep {
+  border-right: 1px solid rgba(255, 255, 255, 0.11);
 }
 
 /* ── Scrollbar ── */
@@ -64,12 +92,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.09);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.16);
 }
 
 /* ── Selection ── */
@@ -95,8 +123,8 @@ body {
 
 .type-badge-integer,
 .type-badge-float {
-  color: #60a5fa;
-  background: rgba(96, 165, 250, 0.12);
+  color: #2dd4bf;
+  background: rgba(45, 212, 191, 0.12);
 }
 
 .type-badge-date {
@@ -112,12 +140,12 @@ body {
 /* ── Sparkline ── */
 
 .sparkline-bar {
-  background: rgba(147, 197, 253, 0.5);
+  background: rgba(45, 212, 191, 0.32);
   transition: background 0.15s;
 }
 
 .sparkline-bar:hover {
-  background: rgba(147, 197, 253, 0.75);
+  background: rgba(45, 212, 191, 0.58);
 }
 
 /* ── Animations ── */
@@ -158,62 +186,21 @@ body {
   animation: scaleIn 0.15s ease-out;
 }
 
+/* ── Gradient shimmer borders ──
+   Applied ONLY to floating/active surfaces that need to pop.
+   NOT applied to utility classes — all other borders are flat rgba.
+── */
+
 .gradient-border-active {
   border: 1px solid transparent;
   background:
     linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
-    linear-gradient(120deg, rgba(147, 197, 253, 0.75), rgba(96, 165, 250, 0.35), rgba(147, 197, 253, 0.75)) border-box;
+    linear-gradient(120deg, rgba(45, 212, 191, 0.65), rgba(45, 212, 191, 0.18), rgba(45, 212, 191, 0.65)) border-box;
 }
 
 .gradient-border-subtle {
   border: 1px solid transparent;
   background:
     linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
-    linear-gradient(120deg, rgba(147, 197, 253, 0.35), rgba(147, 197, 253, 0.08), rgba(147, 197, 253, 0.35)) border-box;
-}
-
-/* Flat gradient strokes for standard border utilities */
-:where(
-  [class~="border-border"],
-  [class~="border-border-strong"],
-  [class*="border-border/"],
-  [class*="border-border-strong/"]
-) {
-  border-color: transparent !important;
-  border-image-slice: 1;
-  --edge-grad: linear-gradient(
-    120deg,
-    rgba(125, 211, 252, 0.16),
-    rgba(96, 165, 250, 0.1),
-    rgba(125, 211, 252, 0.16)
-  );
-  border-image-source: var(--edge-grad);
-}
-
-:where([class~="border-border-strong"], [class*="border-border-strong/"]) {
-  --edge-grad: linear-gradient(
-    120deg,
-    rgba(125, 211, 252, 0.22),
-    rgba(96, 165, 250, 0.14),
-    rgba(125, 211, 252, 0.22)
-  );
-}
-
-/* Make stroke direction consistent by edge for cleaner grid lines */
-:where([class~="border-t"], [class~="border-b"]) {
-  --edge-grad: linear-gradient(
-    90deg,
-    rgba(125, 211, 252, 0.16),
-    rgba(96, 165, 250, 0.11),
-    rgba(125, 211, 252, 0.16)
-  );
-}
-
-:where([class~="border-l"], [class~="border-r"]) {
-  --edge-grad: linear-gradient(
-    180deg,
-    rgba(125, 211, 252, 0.16),
-    rgba(96, 165, 250, 0.11),
-    rgba(125, 211, 252, 0.16)
-  );
+    linear-gradient(120deg, rgba(45, 212, 191, 0.22), rgba(45, 212, 191, 0.05), rgba(45, 212, 191, 0.22)) border-box;
 }

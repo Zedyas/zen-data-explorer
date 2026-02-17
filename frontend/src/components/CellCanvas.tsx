@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject, type UIEvent } from 'react'
 import { useRunTableQuery } from '../api.ts'
 import { useAppStore } from '../store.ts'
+import { LabCell } from './LabCell.tsx'
 import { SqlCell } from './SqlCell.tsx'
 import { TableCell } from './TableCell.tsx'
-import type { AggregationSpec, Filter, HavingSpec, InvestigationCell, TableQueryResponse, TableQuerySpec } from '../types.ts'
+import type { AggregationSpec, ColumnType, Filter, HavingSpec, InvestigationCell, TableQueryResponse, TableQuerySpec } from '../types.ts'
 import {
   ACTION_CLASS,
   AGG_OPS,
@@ -14,9 +15,10 @@ import {
   appendSort,
   applyLimitValue,
   ensureDraftColumn,
-  FILTER_OPS,
+  getFilterOpsForType,
   HAVING_OPS,
   INPUT_CLASS,
+  normalizeFilterOperator,
   QueryChip,
   QueryToggle,
   formatFilterOp,
@@ -421,7 +423,7 @@ function CompareSideConfig({
   isRunning,
 }: {
   label: string
-  datasets: Array<{ id: string; name: string; columns: Array<{ name: string }> }>
+  datasets: Array<{ id: string; name: string; columns: Array<{ name: string; type: ColumnType }> }>
   datasetId: string | null
   setDatasetId: (id: string | null) => void
   spec: TableQuerySpec
@@ -448,6 +450,15 @@ function CompareSideConfig({
   const dataset = datasets.find((d) => d.id === datasetId)
   const columns = dataset?.columns ?? []
   const [activeControl, setActiveControl] = useState<CompareControlKey | null>('filter')
+  const filterOps = useMemo(
+    () => getFilterOpsForType(columns.find((c) => c.name === filterDraft.column)?.type),
+    [columns, filterDraft.column],
+  )
+
+  useEffect(() => {
+    const type = columns.find((c) => c.name === filterDraft.column)?.type
+    setFilterDraft((s) => ({ ...s, operator: normalizeFilterOperator(s.operator, type) }))
+  }, [columns, filterDraft.column, setFilterDraft])
 
   function addFilter() {
     setSpec(appendFilter(spec, filterDraft))
@@ -506,11 +517,23 @@ function CompareSideConfig({
 
             {activeControl === 'filter' && (
               <div className="flex items-center gap-1.5 flex-wrap">
-                <select value={filterDraft.column} onChange={(e) => setFilterDraft((s) => ({ ...s, column: e.target.value }))} className={INPUT_CLASS}>
+                <select
+                  value={filterDraft.column}
+                  onChange={(e) => {
+                    const nextColumn = e.target.value
+                    const nextType = columns.find((c) => c.name === nextColumn)?.type
+                    setFilterDraft((s) => ({
+                      ...s,
+                      column: nextColumn,
+                      operator: normalizeFilterOperator(s.operator, nextType),
+                    }))
+                  }}
+                  className={INPUT_CLASS}
+                >
                   {columns.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
                 </select>
                 <select value={filterDraft.operator} onChange={(e) => setFilterDraft((s) => ({ ...s, operator: e.target.value }))} className={INPUT_CLASS}>
-                  {FILTER_OPS.map((op) => <option key={op} value={op}>{formatFilterOp(op)}</option>)}
+                  {filterOps.map((op) => <option key={op} value={op}>{formatFilterOp(op)}</option>)}
                 </select>
                 {!isNullOp(filterDraft.operator) && (
                   <input value={String(filterDraft.value)} onChange={(e) => setFilterDraft((s) => ({ ...s, value: e.target.value }))} className={`${INPUT_CLASS} min-w-20`} placeholder="value" />
@@ -726,6 +749,9 @@ export function CellCanvas() {
             <button disabled={!activeDataset} onClick={() => addCell('sql')} className="px-2 py-1 rounded border border-border-strong bg-surface text-xs text-text-secondary hover:text-text hover:border-accent disabled:opacity-40 transition-colors">
               + SQL Cell
             </button>
+            <button disabled={!activeDataset} onClick={() => addCell('lab')} className="px-2 py-1 rounded border border-border-strong bg-surface text-xs text-text-secondary hover:text-text hover:border-accent disabled:opacity-40 transition-colors">
+              + Lab Cell
+            </button>
             {!activeDataset && <span className="text-[10px] text-text-muted">Load/select a dataset to add query cells.</span>}
           </div>
         )}
@@ -745,6 +771,7 @@ export function CellCanvas() {
             if (cell.type === 'table') return <TableCell key={cell.id} cell={cell} />
             if (cell.type === 'sql') return <SqlCell key={cell.id} cell={cell} />
             if (cell.type === 'compare') return <CompareCell key={cell.id} cell={cell} />
+            if (cell.type === 'lab') return <LabCell key={cell.id} cell={cell} />
             return <PythonCell key={cell.id} cell={cell} />
           })}
         </>

@@ -54,6 +54,20 @@ def test_page_rejects_unsupported_operator() -> None:
     assert "Unsupported operator" in resp.text
 
 
+def test_page_rejects_string_comparison_operators() -> None:
+    dataset_id = _dataset_id()
+    resp = client.get(
+        f"/api/datasets/{dataset_id}/page",
+        params={
+            "filters": json.dumps(
+                [{"column": "region", "operator": ">", "value": "West"}]
+            )
+        },
+    )
+    assert resp.status_code == 400
+    assert "Unsupported operator" in resp.text
+
+
 def test_page_rejects_invalid_filter_value_type() -> None:
     dataset_id = _dataset_id()
     resp = client.get(
@@ -81,6 +95,21 @@ def test_page_accepts_is_not_null_filter() -> None:
     assert resp.status_code == 200
     payload = resp.json()
     assert "rows" in payload
+
+
+def test_page_accepts_ends_with_filter() -> None:
+    dataset_id = _dataset_id()
+    resp = client.get(
+        f"/api/datasets/{dataset_id}/page",
+        params={
+            "filters": json.dumps(
+                [{"column": "region", "operator": "ends_with", "value": "st"}]
+            )
+        },
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert all(str(row["region"]).lower().endswith("st") for row in payload["rows"])
 
 
 def test_schema_includes_column_sparklines() -> None:
