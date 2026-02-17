@@ -37,6 +37,7 @@ export function useUploadDataset() {
       setActiveDataset({
         id: data.id,
         name: data.name,
+        sourceType: data.sourceType ?? 'file',
         rowCount: data.rowCount,
         columns: data.columns,
       })

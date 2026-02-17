@@ -5,7 +5,6 @@ import { useUploadDataset } from '../api.ts'
 export function TopBar() {
   const dataset = useAppStore((s) => s.activeDataset)
   const datasets = useAppStore((s) => s.datasets)
-  const switchDataset = useAppStore((s) => s.switchDataset)
   const removeDataset = useAppStore((s) => s.removeDataset)
   const toggleSidebar = useAppStore((s) => s.toggleSidebar)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
@@ -63,22 +62,15 @@ export function TopBar() {
 
       {/* Dataset info */}
       <div className="flex items-center gap-2 min-w-0">
-        {datasets.length > 1 ? (
-          <select
-            value={dataset.id}
-            onChange={(e) => switchDataset(e.target.value)}
-            className="h-7 px-2 rounded border border-border-strong bg-surface-elevated text-xs text-text-secondary min-w-48"
-          >
-            {datasets.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
-        ) : (
-          <span className="text-sm font-medium text-text truncate">{dataset.name}</span>
-        )}
+        <span className="text-sm font-medium text-text truncate">{dataset.name}</span>
         <span className="px-1.5 py-0.5 rounded bg-surface-elevated font-mono text-xs text-text-muted shrink-0">
           {formatCount(dataset.rowCount)} x {dataset.columns.length}
         </span>
+        {datasets.length > 1 && (
+          <span className="px-1.5 py-0.5 rounded border border-border-strong bg-surface text-[10px] text-text-muted font-mono">
+            {datasets.length} instances
+          </span>
+        )}
       </div>
 
       {/* Spacer */}

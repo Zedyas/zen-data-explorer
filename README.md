@@ -4,7 +4,7 @@ Zen Data Explorer is a local-first web app for exploratory data analysis and lig
 
 It is built to reduce repetitive notebook loops by giving you:
 - a full `Overview` table for quick inspection,
-- `Dynamic Views` with no-code table cells,
+- a per-dataset `Notebook` for saved investigation cells,
 - optional SQL/Python-friendly views when needed.
 
 No cloud service. No multi-user complexity. Runs on your machine.
@@ -12,14 +12,15 @@ No cloud service. No multi-user complexity. Runs on your machine.
 ## Features
 
 - CSV upload into DuckDB-backed local session
+- Multiple dataset instances in one local session
 - Fast table browsing with server-side filtering, sorting, and keyset pagination
 - Rich column headers (type, null %, unique count, distribution preview)
 - Column profile popover (stats + distributions)
-- Dynamic cells:
-  - Table cells (filter, group, aggregate, sort, limit)
+- Notebook cells:
+  - Table cells (filter, group, aggregate, having, sort, limit)
   - SQL cells
   - Python text cells (display/edit)
-  - Compare cells (side-by-side result comparison)
+  - Compare cells (left/right dataset builders with independent modifiers)
 - CSV export of filtered/sorted results
 
 ## Tech Stack
@@ -71,4 +72,4 @@ python -m pytest -q
 ## Notes
 
 - This project is intentionally single-user and local-only.
-- Dynamic cells are designed to keep analysis reproducible without forcing code-first workflows.
+- Notebook cells are designed to keep analysis reproducible without forcing code-first workflows.

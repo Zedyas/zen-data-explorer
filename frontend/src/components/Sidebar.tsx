@@ -1,4 +1,13 @@
 import { useAppStore } from '../store.ts'
+import {
+  CodeIcon,
+  CodeXmlIcon,
+  CompareIcon,
+  DynamicIcon,
+  OverviewDatabaseIcon,
+  OverviewFileIcon,
+  TableIcon,
+} from './icons.tsx'
 
 export function Sidebar() {
   const dataset = useAppStore((s) => s.activeDataset)
@@ -8,6 +17,7 @@ export function Sidebar() {
   const setWorkspaceTab = useAppStore((s) => s.setWorkspaceTab)
   const activeCellId = useAppStore((s) => s.activeCellId)
   const setActiveCell = useAppStore((s) => s.setActiveCell)
+  const switchDataset = useAppStore((s) => s.switchDataset)
 
   function scrollToTarget(id: string) {
     const tryScroll = () => {
@@ -22,101 +32,114 @@ export function Sidebar() {
     setTimeout(() => { void tryScroll() }, 120)
   }
 
+  function openOverviewFor(datasetId: string) {
+    switchDataset(datasetId)
+    setWorkspaceTab('overview')
+    setActiveCell(null)
+    scrollToTarget('overview-view')
+  }
+
+  function openDynamicFor(datasetId: string, defaultCellId: string | null) {
+    switchDataset(datasetId)
+    setWorkspaceTab('dynamic')
+    setActiveCell(defaultCellId)
+  }
+
+  function openCell(cellId: string, datasetId: string | undefined) {
+    if (datasetId) switchDataset(datasetId)
+    setWorkspaceTab('dynamic')
+    setActiveCell(cellId)
+    scrollToTarget(`cell-${cellId}`)
+  }
+
   return (
-    <div className="w-56 border-r border-border-strong bg-bg-deep flex flex-col shrink-0">
-      {/* Header */}
+    <div className="w-64 border-r border-border-strong bg-bg-deep flex flex-col shrink-0">
       <div className="px-3 py-2 border-b border-border-strong">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-          Outline
-        </span>
-        <div className="mt-2 flex items-center gap-1 rounded bg-surface-elevated p-0.5 border border-border">
-          <button
-            onClick={() => setWorkspaceTab('overview')}
-            className={`flex-1 rounded px-1.5 py-1 text-[10px] transition-colors ${
-              workspaceTab === 'overview' ? 'gradient-border-subtle text-accent' : 'text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            Overview
-          </button>
-          <button
-            onClick={() => setWorkspaceTab('dynamic')}
-            className={`flex-1 rounded px-1.5 py-1 text-[10px] transition-colors ${
-              workspaceTab === 'dynamic' ? 'gradient-border-subtle text-accent' : 'text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            Dynamic
-          </button>
-        </div>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Instances</span>
       </div>
 
-      {/* Cell list */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        <div
-          onClick={() => {
-            setWorkspaceTab('overview')
-            setActiveCell(null)
-            scrollToTarget('overview-view')
-          }}
-          className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm cursor-pointer border ${
-            workspaceTab === 'overview' ? 'border-accent/40 bg-accent-dim' : 'border-transparent hover:border-border hover:bg-surface-hover/30'
-          }`}
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-accent shrink-0">
-            <rect x="1" y="2" width="14" height="12" rx="1.5" />
-            <line x1="1" y1="6" x2="15" y2="6" />
-            <line x1="6" y1="6" x2="6" y2="14" />
-          </svg>
-          <span className="text-text truncate">Overview Table</span>
-        </div>
+      <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        {datasets.length === 0 && (
+          <div className="text-xs text-text-muted px-1 py-2">No dataset loaded.</div>
+        )}
 
-        {cells.map((cell, i) => (
-          <div
-            key={cell.id}
-            onClick={() => {
-              setWorkspaceTab('dynamic')
-              setActiveCell(cell.id)
-              scrollToTarget(`cell-${cell.id}`)
-            }}
-            className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors cursor-pointer border ${
-              activeCellId === cell.id ? 'border-accent/40 bg-accent-dim' : 'border-transparent hover:border-border hover:bg-surface-hover/30'
-            }`}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-muted shrink-0">
-              <rect x="1" y="1" width="14" height="14" rx="2" />
-              <path d="M4 5h8M4 8h5M4 11h7" />
-            </svg>
-            <span className="text-text-secondary truncate">
-              {cell.title || `${cell.type.toUpperCase()} ${i + 1}`}
-            </span>
-            {(cell.datasetId && cell.type !== 'compare') && (
-              <span className="text-[9px] text-text-muted font-mono">
-                {datasets.find((d) => d.id === cell.datasetId)?.name ?? 'dataset'}
-              </span>
-            )}
-            {cell.isRunning && (
-              <span className="text-[9px] text-accent ml-auto">running</span>
-            )}
-            {cell.result && !cell.isRunning && (
-              <span className="text-[9px] text-success ml-auto font-mono">
-                {cell.result.rowCount}x{cell.result.columns.length}
-              </span>
-            )}
-            {cell.error && !cell.isRunning && (
-              <span className="text-[9px] text-error ml-auto">err</span>
-            )}
-          </div>
-        ))}
+        {datasets.map((d) => {
+          const isActiveDataset = dataset?.id === d.id
+          const datasetCells = cells.filter((c) => c.datasetId === d.id)
+
+          return (
+            <div key={d.id} className="rounded border border-border/60 bg-surface/40">
+              <div
+                onClick={() => switchDataset(d.id)}
+                className={`px-2 py-1.5 text-xs font-medium cursor-pointer border-b border-border/60 ${
+                  isActiveDataset ? 'text-text bg-surface-elevated' : 'text-text-secondary hover:bg-surface-hover/30'
+                }`}
+                title={d.name}
+              >
+                <div className="truncate">{d.name}</div>
+                <div className="text-[10px] text-text-muted font-mono mt-0.5">{d.rowCount.toLocaleString()}x{d.columns.length}</div>
+              </div>
+
+              <div className="p-1 space-y-1">
+                <div
+                  onClick={() => openOverviewFor(d.id)}
+                  className={`flex items-center gap-2 px-2 py-1 rounded text-xs cursor-pointer border ${
+                    isActiveDataset && workspaceTab === 'overview'
+                      ? 'border-accent/40 bg-accent-dim text-accent'
+                      : 'border-transparent text-text-secondary hover:border-border hover:bg-surface-hover/30'
+                  }`}
+                >
+                  {d.sourceType === 'database' ? <OverviewDatabaseIcon /> : <OverviewFileIcon />}
+                  <span className="truncate">Overview</span>
+                </div>
+
+                <div
+                  onClick={() => openDynamicFor(d.id, datasetCells.at(-1)?.id ?? null)}
+                  className={`flex items-center gap-2 px-2 py-1 rounded text-xs cursor-pointer border ${
+                    isActiveDataset && workspaceTab === 'dynamic'
+                      ? 'border-accent/40 bg-accent-dim text-accent'
+                      : 'border-transparent text-text-secondary hover:border-border hover:bg-surface-hover/30'
+                  }`}
+                >
+                  <DynamicIcon />
+                  <span className="truncate">Notebook</span>
+                  <span className="ml-auto text-[9px] font-mono text-text-muted">{datasetCells.length}</span>
+                </div>
+
+                {datasetCells.map((cell) => (
+                  <div
+                    key={cell.id}
+                    onClick={() => openCell(cell.id, cell.datasetId)}
+                    className={`flex items-center gap-2 px-2 py-1 rounded text-xs cursor-pointer border ${
+                      activeCellId === cell.id && isActiveDataset && workspaceTab === 'dynamic'
+                        ? 'border-accent/40 bg-accent-dim'
+                        : 'border-transparent hover:border-border hover:bg-surface-hover/30'
+                    }`}
+                    >
+                    <span className="text-text-muted">
+                      {cell.type === 'compare'
+                        ? <CompareIcon />
+                        : cell.type === 'table'
+                          ? <TableIcon />
+                          : cell.type === 'python'
+                            ? <CodeIcon />
+                            : <CodeXmlIcon />}
+                    </span>
+                    <span className="text-text-secondary truncate">{cell.title}</span>
+                    {cell.result && !cell.isRunning && (
+                      <span className="text-[9px] text-success ml-auto font-mono">
+                        {cell.result.rowCount}x{cell.result.columns.length}
+                      </span>
+                    )}
+                    {cell.isRunning && <span className="text-[9px] text-accent ml-auto">run</span>}
+                    {cell.error && !cell.isRunning && <span className="text-[9px] text-error ml-auto">err</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
       </div>
-
-      {/* Dataset source */}
-      {dataset && (
-        <div className="px-3 py-2 border-t border-border-strong">
-          <div className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Source</div>
-          <div className="text-xs text-text-secondary font-mono truncate" title={dataset.name}>
-            {dataset.name}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
