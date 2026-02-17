@@ -163,8 +163,6 @@ export interface InvestigationCell {
     maxColumns: number
     nullThresholdPct: number
     uniqueFloorPct: number
-    outlierMetric?: string
-    outlierPercentile?: number
     modules?: LabModule[]
   }
   autoRun?: boolean

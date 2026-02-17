@@ -299,8 +299,6 @@ export const useAppStore = create<AppState>((set) => ({
             maxColumns: 8,
             nullThresholdPct: 10,
             uniqueFloorPct: 95,
-            outlierMetric: '',
-            outlierPercentile: 0.99,
           }
           : undefined,
         autoRun: type === 'table' ? firstTableCell : false,
