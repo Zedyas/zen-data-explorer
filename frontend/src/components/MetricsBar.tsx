@@ -13,6 +13,7 @@ export function MetricsBar() {
     [cells, activeCellId, dataset?.id],
   )
   const activeCellResult = activeCell?.result as TableQueryResponse | null
+  const workspaceLabel = workspaceTab === 'dynamic' ? 'notebook' : workspaceTab
 
   if (!dataset) return null
 
@@ -21,7 +22,7 @@ export function MetricsBar() {
       <div className="flex items-center gap-3 text-text-muted">
         <span className="font-mono">{dataset.rowCount.toLocaleString()} rows</span>
         <span className="font-mono">{dataset.columns.length} cols</span>
-        <span className="font-mono">mode: {workspaceTab}</span>
+        <span className="font-mono">mode: {workspaceLabel}</span>
       </div>
       <div className="flex items-center gap-2">
         {workspaceTab === 'dynamic' && activeCell && activeCellResult && (

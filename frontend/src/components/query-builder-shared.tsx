@@ -1,4 +1,4 @@
-import type { AggregationSpec } from '../types.ts'
+import type { AggregationSpec, Filter, HavingSpec, TableQuerySpec } from '../types.ts'
 
 export const FILTER_OPS = ['=', '!=', '>', '<', '>=', '<=', 'contains', 'starts_with', 'is_null', 'is_not_null'] as const
 export const AGG_OPS: ReadonlyArray<AggregationSpec['op']> = ['count', 'sum', 'avg', 'min', 'max']
@@ -23,6 +23,57 @@ export function formatFilterOp(op: string) {
   return op
 }
 
+export function ensureDraftColumn(current: string, columns: string[]): string {
+  if (!columns.length) return ''
+  if (current && columns.includes(current)) return current
+  return columns[0]
+}
+
+export function appendFilter(spec: TableQuerySpec, draft: Filter): TableQuerySpec {
+  if (!draft.column || !draft.operator) return spec
+  const normalized: Filter = isNullOp(draft.operator)
+    ? { column: draft.column, operator: draft.operator, value: '' }
+    : draft
+  return { ...spec, filters: [...spec.filters, normalized] }
+}
+
+export function appendGroupBy(spec: TableQuerySpec, column: string): TableQuerySpec {
+  if (!column || spec.groupBy.includes(column)) return spec
+  return { ...spec, groupBy: [...spec.groupBy, column] }
+}
+
+export function appendAggregation(
+  spec: TableQuerySpec,
+  draft: { op: AggregationSpec['op']; column: string },
+): TableQuerySpec {
+  if (!draft.column) return spec
+  return { ...spec, aggregations: [...spec.aggregations, { op: draft.op, column: draft.column }] }
+}
+
+export function appendHaving(spec: TableQuerySpec, draft: HavingSpec): TableQuerySpec {
+  if (!draft.metric || !draft.operator) return spec
+  const raw = String(draft.value).trim()
+  if (!raw) return spec
+  const parsed = Number(raw)
+  const value: string | number = Number.isFinite(parsed) ? parsed : raw
+  return {
+    ...spec,
+    having: [...spec.having, { metric: draft.metric, operator: draft.operator, value }],
+  }
+}
+
+export function appendSort(spec: TableQuerySpec, draft: { column: string; direction: 'asc' | 'desc' }): TableQuerySpec {
+  if (!draft.column) return spec
+  return { ...spec, sort: [...spec.sort, draft] }
+}
+
+export function applyLimitValue(spec: TableQuerySpec, input: string): { spec: TableQuerySpec; limit: string } {
+  const parsed = Number(input)
+  if (!Number.isFinite(parsed)) return { spec, limit: String(spec.limit ?? 200) }
+  const clamped = Math.max(1, Math.min(10000, Math.trunc(parsed)))
+  return { spec: { ...spec, limit: clamped }, limit: String(clamped) }
+}
+
 export function QueryToggle({
   label,
   value,
@@ -39,7 +90,7 @@ export function QueryToggle({
       onClick={onClick}
       className={`px-1 py-0.5 rounded border transition-colors ${
         active
-          ? 'bg-accent-dim border-accent/40 text-accent'
+          ? 'bg-bg-deep/60 border-border-strong text-text-muted'
           : 'bg-surface border-border text-text-muted hover:text-text-secondary'
       }`}
     >
@@ -50,14 +101,14 @@ export function QueryToggle({
 
 export function QueryChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1 px-1 py-0.5 rounded text-[10px] bg-accent-dim text-accent font-mono">
+    <span className="inline-flex items-center gap-1 px-1 py-0.5 rounded text-[10px] bg-bg-deep/55 border border-border/70 text-text-muted font-mono">
       {label}
       <button
         onClick={(e) => {
           e.stopPropagation()
           onRemove()
         }}
-        className="text-accent/70 hover:text-accent"
+        className="text-text-muted hover:text-text"
         aria-label={`Remove ${label}`}
       >
         x

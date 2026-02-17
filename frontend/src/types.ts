@@ -133,6 +133,10 @@ export interface InvestigationCell {
     leftResult: TableQueryResponse | null
     rightResult: TableQueryResponse | null
   }
+  compareUi?: {
+    showControls: boolean
+    syncScroll: boolean
+  }
   autoRun?: boolean
   result: QueryResponse | TableQueryResponse | null
   error: string | null

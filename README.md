@@ -31,6 +31,7 @@ No cloud service. No multi-user complexity. Runs on your machine.
 ## Requirements
 
 - Python `3.12.x` (minimum supported: `3.11`)
+- Python package workflow: `pip` + virtualenv (`venv`), not `uv`
 - Node.js 20+
 - npm 10+
 
