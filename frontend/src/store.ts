@@ -5,6 +5,7 @@ import type {
   Dataset,
   Filter,
   InvestigationCell,
+  NotebookView,
   TableQuerySpec,
   WorkspaceTab,
 } from './types.ts'
@@ -82,6 +83,8 @@ interface AppState {
 
   workspaceTab: WorkspaceTab
   setWorkspaceTab: (tab: WorkspaceTab) => void
+  notebookView: NotebookView
+  setNotebookView: (view: NotebookView) => void
 
   columnStats: Map<string, { nullPercent: number; sparkline: number[] }>
   setColumnStats: (stats: Map<string, { nullPercent: number; sparkline: number[] }>) => void
@@ -237,6 +240,8 @@ export const useAppStore = create<AppState>((set) => ({
 
   workspaceTab: 'overview',
   setWorkspaceTab: (tab) => set({ workspaceTab: tab }),
+  notebookView: 'insights',
+  setNotebookView: (view) => set({ notebookView: view }),
 
   columnStats: new Map(),
   setColumnStats: (stats) => set({ columnStats: stats }),
