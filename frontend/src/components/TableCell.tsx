@@ -5,6 +5,13 @@ import type { AggregationSpec, Filter, HavingSpec, InvestigationCell, TableQuery
 import {
   ACTION_CLASS,
   AGG_OPS,
+  appendAggregation,
+  appendFilter,
+  appendGroupBy,
+  appendHaving,
+  appendSort,
+  applyLimitValue,
+  ensureDraftColumn,
   FILTER_OPS,
   HAVING_OPS,
   INPUT_CLASS,
@@ -67,6 +74,14 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
     )
   }, [havingMetrics])
 
+  useEffect(() => {
+    const names = columns.map((c) => c.name)
+    setFilterDraft((s) => ({ ...s, column: ensureDraftColumn(s.column, names) }))
+    setGroupByDraft((prev) => ensureDraftColumn(prev, names))
+    setAggDraft((s) => ({ ...s, column: s.column === '*' ? '*' : ensureDraftColumn(s.column, names) }))
+    setSortDraft((s) => ({ ...s, column: ensureDraftColumn(s.column, names) }))
+  }, [columns])
+
   const result = cell.result as TableQueryResponse | null
   const canRun = useMemo(() => !!dataset, [dataset])
 
@@ -97,59 +112,29 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
   }, [cell.autoRun, canRun, cell.isRunning, cell.result, cell.id, runCell, updateCell])
 
   function addFilter() {
-    if (!filterDraft.column || !filterDraft.operator) return
-    const cleanFilter: Filter = isNullOp(filterDraft.operator)
-      ? { column: filterDraft.column, operator: filterDraft.operator, value: '' }
-      : filterDraft
-    updateCell(cell.id, { tableSpec: { ...spec, filters: [...spec.filters, cleanFilter] } })
+    updateCell(cell.id, { tableSpec: appendFilter(spec, filterDraft) })
   }
 
   function addGroup() {
-    if (!groupByDraft || spec.groupBy.includes(groupByDraft)) return
-    updateCell(cell.id, { tableSpec: { ...spec, groupBy: [...spec.groupBy, groupByDraft] } })
+    updateCell(cell.id, { tableSpec: appendGroupBy(spec, groupByDraft) })
   }
 
   function addAgg() {
-    const nextAgg: AggregationSpec = { op: aggDraft.op, column: aggDraft.column }
-    const nextAggs = [...spec.aggregations, nextAgg]
-    updateCell(cell.id, {
-      tableSpec: {
-        ...spec,
-        aggregations: nextAggs,
-      },
-    })
+    updateCell(cell.id, { tableSpec: appendAggregation(spec, aggDraft) })
   }
 
   function addHaving() {
-    if (!havingDraft.metric || !havingDraft.operator) return
-    const raw = String(havingDraft.value).trim()
-    if (!raw) return
-    const parsedNum = Number(raw)
-    const value: string | number = Number.isFinite(parsedNum) ? parsedNum : raw
-    updateCell(cell.id, {
-      tableSpec: {
-        ...spec,
-        having: [...spec.having, { metric: havingDraft.metric, operator: havingDraft.operator, value }],
-      },
-    })
+    updateCell(cell.id, { tableSpec: appendHaving(spec, havingDraft) })
   }
 
   function addSort() {
-    if (!sortDraft.column) return
-    updateCell(cell.id, {
-      tableSpec: {
-        ...spec,
-        sort: [...spec.sort, sortDraft],
-      },
-    })
+    updateCell(cell.id, { tableSpec: appendSort(spec, sortDraft) })
   }
 
   function applyLimit() {
-    const parsed = Number(limitDraft)
-    if (!Number.isFinite(parsed)) return
-    const clamped = Math.max(1, Math.min(10000, Math.trunc(parsed)))
-    setLimitDraft(String(clamped))
-    updateCell(cell.id, { tableSpec: { ...spec, limit: clamped } })
+    const next = applyLimitValue(spec, limitDraft)
+    setLimitDraft(next.limit)
+    updateCell(cell.id, { tableSpec: next.spec })
   }
 
   function toggleControl(key: ControlKey) {
@@ -195,7 +180,7 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
         </div>
       </div>
 
-      <div className="px-2.5 py-1 border-b border-border-strong bg-bg-deep flex items-center gap-1.5 text-[10px] font-mono flex-wrap">
+      <div className="px-2.5 py-1 border-b border-border-strong bg-bg-deep/70 flex items-center gap-1.5 text-[10px] font-mono flex-wrap">
         <QueryToggle label="Filter" value={String(spec.filters.length)} active={activeControl === 'filter'} onClick={() => toggleControl('filter')} />
         <QueryToggle
           label="Analyze"
@@ -208,7 +193,7 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
       </div>
 
       {(spec.filters.length > 0 || spec.groupBy.length > 0 || spec.aggregations.length > 0 || spec.having.length > 0 || spec.sort.length > 0) && (
-        <div className="px-2.5 py-1 border-b border-border bg-bg-deep/80 flex items-center gap-1 flex-wrap">
+        <div className="px-2.5 py-1 border-b border-border bg-bg-deep/60 flex items-center gap-1 flex-wrap">
           {spec.filters.map((f, idx) => (
             <QueryChip
               key={`f-${idx}`}
@@ -258,7 +243,7 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
       )}
 
       {activeControl && (
-        <div className="px-2.5 py-1.5 border-b border-border bg-bg-deep">
+        <div className="px-2.5 py-1.5 border-b border-border bg-bg-deep/70">
           {activeControl === 'filter' && (
             <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
               <select
@@ -290,7 +275,7 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
           {activeControl === 'analyze' && (
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
-                <span className="text-text-muted font-mono text-[10px]">Group</span>
+                <span className="w-12 text-right text-text-muted font-mono text-[10px]">Group</span>
                 <select
                   value={groupByDraft}
                   onChange={(e) => setGroupByDraft(e.target.value)}
@@ -302,7 +287,7 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
               </div>
 
               <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
-                <span className="text-text-muted font-mono text-[10px]">Agg</span>
+                <span className="w-12 text-right text-text-muted font-mono text-[10px]">Agg</span>
                 <select
                   value={aggDraft.op}
                   onChange={(e) => setAggDraft((s) => ({ ...s, op: e.target.value as AggregationSpec['op'] }))}
@@ -322,7 +307,7 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
               </div>
 
               <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
-                <span className="text-text-muted font-mono text-[10px]">Having</span>
+                <span className="w-12 text-right text-text-muted font-mono text-[10px]">Having</span>
                 <select
                   value={havingDraft.metric}
                   onChange={(e) => setHavingDraft((s) => ({ ...s, metric: e.target.value }))}
@@ -414,9 +399,9 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
               </thead>
               <tbody>
                 {result.rows.map((row, i) => (
-                  <tr key={i} className="border-t border-border/50 hover:bg-surface-hover/40">
+                  <tr key={i} className="border-t border-border/50 bg-bg-deep/70 hover:bg-surface-hover/25">
                     {result.columns.map((col) => (
-                      <td key={col} className="px-2 py-0.5 font-mono border-r border-border/20 last:border-r-0">
+                      <td key={col} className="px-2 py-0.5 font-mono border-r border-border/20 last:border-r-0 bg-bg-deep/70">
                         {row[col] == null ? <span className="text-text-muted/40 italic">null</span> : String(row[col])}
                       </td>
                     ))}

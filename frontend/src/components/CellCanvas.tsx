@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject, type UIEvent } from 'react'
 import { useRunTableQuery } from '../api.ts'
 import { useAppStore } from '../store.ts'
 import { SqlCell } from './SqlCell.tsx'
@@ -7,11 +7,19 @@ import type { AggregationSpec, Filter, HavingSpec, InvestigationCell, TableQuery
 import {
   ACTION_CLASS,
   AGG_OPS,
+  appendAggregation,
+  appendFilter,
+  appendGroupBy,
+  appendHaving,
+  appendSort,
+  applyLimitValue,
+  ensureDraftColumn,
   FILTER_OPS,
   HAVING_OPS,
   INPUT_CLASS,
   QueryChip,
   QueryToggle,
+  formatFilterOp,
   getAggAlias,
   isNullOp,
 } from './query-builder-shared.tsx'
@@ -26,6 +34,13 @@ function defaultSpec(): TableQuerySpec {
     sort: [],
     limit: 200,
   }
+}
+
+function compareMetricDelta(left: number, right: number): string {
+  const diff = left - right
+  const pct = right === 0 ? null : (diff / right) * 100
+  if (pct == null || !Number.isFinite(pct)) return `${diff.toLocaleString()}`
+  return `${diff.toLocaleString()} (${pct.toFixed(1)}%)`
 }
 
 
@@ -78,8 +93,22 @@ function CompareCell({ cell }: { cell: InvestigationCell }) {
         leftResult: null,
         rightResult: null,
       },
+      compareUi: {
+        showControls: false,
+        syncScroll: false,
+      },
     })
   }, [compare, datasets, updateCell, cell.id])
+
+  useEffect(() => {
+    if (!compare || cell.compareUi) return
+    updateCell(cell.id, {
+      compareUi: {
+        showControls: false,
+        syncScroll: false,
+      },
+    })
+  }, [compare, cell.compareUi, updateCell, cell.id])
 
   const leftDataset = datasets.find((d) => d.id === compare?.leftDatasetId) ?? null
   const rightDataset = datasets.find((d) => d.id === compare?.rightDatasetId) ?? null
@@ -98,25 +127,30 @@ function CompareCell({ cell }: { cell: InvestigationCell }) {
   const [rightSortDraft, setRightSortDraft] = useState<{ column: string; direction: 'asc' | 'desc' }>({ column: '', direction: 'asc' })
   const [leftLimitDraft, setLeftLimitDraft] = useState('200')
   const [rightLimitDraft, setRightLimitDraft] = useState('200')
-  const [showControls, setShowControls] = useState(false)
+  const runVersionRef = useRef(0)
+  const syncingRef = useRef(false)
+  const leftPaneRef = useRef<HTMLDivElement | null>(null)
+  const rightPaneRef = useRef<HTMLDivElement | null>(null)
+  const showControls = cell.compareUi?.showControls ?? false
+  const syncScroll = cell.compareUi?.syncScroll ?? false
 
   useEffect(() => {
     const cols = leftDataset?.columns ?? []
-    if (!cols.length) return
-    if (!leftFilterDraft.column) setLeftFilterDraft((s) => ({ ...s, column: cols[0].name }))
-    if (!leftGroupDraft) setLeftGroupDraft(cols[0].name)
-    if (!leftAggDraft.column || leftAggDraft.column === '*') setLeftAggDraft((s) => ({ ...s, column: cols[0].name }))
-    if (!leftSortDraft.column) setLeftSortDraft((s) => ({ ...s, column: cols[0].name }))
-  }, [leftDataset, leftFilterDraft.column, leftGroupDraft, leftAggDraft.column, leftSortDraft.column])
+    const names = cols.map((c) => c.name)
+    setLeftFilterDraft((s) => ({ ...s, column: ensureDraftColumn(s.column, names) }))
+    setLeftGroupDraft((s) => ensureDraftColumn(s, names))
+    setLeftAggDraft((s) => ({ ...s, column: s.column === '*' ? '*' : ensureDraftColumn(s.column, names) }))
+    setLeftSortDraft((s) => ({ ...s, column: ensureDraftColumn(s.column, names) }))
+  }, [leftDataset])
 
   useEffect(() => {
     const cols = rightDataset?.columns ?? []
-    if (!cols.length) return
-    if (!rightFilterDraft.column) setRightFilterDraft((s) => ({ ...s, column: cols[0].name }))
-    if (!rightGroupDraft) setRightGroupDraft(cols[0].name)
-    if (!rightAggDraft.column || rightAggDraft.column === '*') setRightAggDraft((s) => ({ ...s, column: cols[0].name }))
-    if (!rightSortDraft.column) setRightSortDraft((s) => ({ ...s, column: cols[0].name }))
-  }, [rightDataset, rightFilterDraft.column, rightGroupDraft, rightAggDraft.column, rightSortDraft.column])
+    const names = cols.map((c) => c.name)
+    setRightFilterDraft((s) => ({ ...s, column: ensureDraftColumn(s.column, names) }))
+    setRightGroupDraft((s) => ensureDraftColumn(s, names))
+    setRightAggDraft((s) => ({ ...s, column: s.column === '*' ? '*' : ensureDraftColumn(s.column, names) }))
+    setRightSortDraft((s) => ({ ...s, column: ensureDraftColumn(s.column, names) }))
+  }, [rightDataset])
 
   const leftMetrics = useMemo(() => (compare?.leftSpec.aggregations ?? []).map(getAggAlias), [compare?.leftSpec.aggregations])
   const rightMetrics = useMemo(() => (compare?.rightSpec.aggregations ?? []).map(getAggAlias), [compare?.rightSpec.aggregations])
@@ -149,6 +183,16 @@ function CompareCell({ cell }: { cell: InvestigationCell }) {
     updateCell(cell.id, { compare: next })
   }
 
+  function setCompareUi(patch: Partial<NonNullable<InvestigationCell['compareUi']>>) {
+    updateCell(cell.id, {
+      compareUi: {
+        showControls,
+        syncScroll,
+        ...patch,
+      },
+    })
+  }
+
   function updateSpec(side: 'left' | 'right', patch: Partial<TableQuerySpec>) {
     if (side === 'left') {
       patchCompare({ ...compareState, leftSpec: { ...compareState.leftSpec, ...patch }, leftResult: null })
@@ -159,9 +203,13 @@ function CompareCell({ cell }: { cell: InvestigationCell }) {
 
   const runCompare = useCallback(() => {
     if (!leftDataset || !rightDataset) {
-      updateCell(cell.id, { error: 'Select datasets for both sides' })
+      updateCell(cell.id, { error: 'Select datasets for both Left and Right panels.' })
       return
     }
+
+    const compareSnapshot = compareState
+    const runVersion = runVersionRef.current + 1
+    runVersionRef.current = runVersion
 
     updateCell(cell.id, { isRunning: true, error: null })
     let leftDone = false
@@ -173,15 +221,16 @@ function CompareCell({ cell }: { cell: InvestigationCell }) {
 
     const finalize = () => {
       if (!leftDone || !rightDone) return
+      if (runVersionRef.current !== runVersion) return
       const error = [leftErr, rightErr].filter(Boolean).join(' | ') || null
       updateCell(cell.id, {
         isRunning: false,
         error,
-        compare: { ...compareState, leftResult, rightResult },
+        compare: { ...compareSnapshot, leftResult, rightResult },
       })
     }
 
-    leftMutation.mutate(compareState.leftSpec, {
+    leftMutation.mutate(compareSnapshot.leftSpec, {
       onSuccess: (data) => {
         leftResult = data
         leftDone = true
@@ -194,7 +243,7 @@ function CompareCell({ cell }: { cell: InvestigationCell }) {
       },
     })
 
-    rightMutation.mutate(compareState.rightSpec, {
+    rightMutation.mutate(compareSnapshot.rightSpec, {
       onSuccess: (data) => {
         rightResult = data
         rightDone = true
@@ -207,6 +256,21 @@ function CompareCell({ cell }: { cell: InvestigationCell }) {
       },
     })
   }, [leftDataset, rightDataset, updateCell, cell.id, compareState, leftMutation, rightMutation])
+
+  const handlePaneScroll = useCallback(
+    (side: 'left' | 'right') => (event: UIEvent<HTMLDivElement>) => {
+      if (!syncScroll || syncingRef.current) return
+      const source = event.currentTarget
+      const target = side === 'left' ? rightPaneRef.current : leftPaneRef.current
+      if (!target) return
+      syncingRef.current = true
+      target.scrollTop = source.scrollTop
+      requestAnimationFrame(() => {
+        syncingRef.current = false
+      })
+    },
+    [syncScroll],
+  )
 
   useEffect(() => {
     if (!compareState.leftDatasetId || !compareState.rightDatasetId) return
@@ -237,11 +301,24 @@ function CompareCell({ cell }: { cell: InvestigationCell }) {
           <button
             onClick={(e) => {
               e.stopPropagation()
-              setShowControls((v) => !v)
+              setCompareUi({ showControls: !showControls })
             }}
             className="px-2 py-0.5 rounded text-xs border border-border-strong bg-surface text-text-muted hover:text-text-secondary"
           >
             {showControls ? 'Hide controls' : 'Edit controls'}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setCompareUi({ syncScroll: !syncScroll })
+            }}
+            className={`px-2 py-0.5 rounded text-xs border transition-colors ${
+              syncScroll
+                ? 'border-accent/40 bg-accent-dim text-accent'
+                : 'border-border-strong bg-surface text-text-muted hover:text-text-secondary'
+            }`}
+          >
+            Sync scroll
           </button>
           <button onClick={() => removeCell(cell.id)} className="text-text-muted hover:text-error text-sm px-1">&times;</button>
         </div>
@@ -270,6 +347,9 @@ function CompareCell({ cell }: { cell: InvestigationCell }) {
           setLimitDraft={setLeftLimitDraft}
           metrics={leftMetrics}
           showControls={showControls}
+          paneRef={leftPaneRef}
+          onPaneScroll={handlePaneScroll('left')}
+          isRunning={cell.isRunning}
         />
 
         <CompareSideConfig
@@ -294,12 +374,18 @@ function CompareCell({ cell }: { cell: InvestigationCell }) {
           setLimitDraft={setRightLimitDraft}
           metrics={rightMetrics}
           showControls={showControls}
+          paneRef={rightPaneRef}
+          onPaneScroll={handlePaneScroll('right')}
+          isRunning={cell.isRunning}
         />
       </div>
 
       {(compareState.leftResult && compareState.rightResult) && (
-        <div className="px-2.5 py-1 border-t border-border bg-bg-deep text-[10px] font-mono text-text-muted">
-          delta rows: {compareState.leftResult.rowCount - compareState.rightResult.rowCount}
+        <div className="px-2.5 py-1 border-t border-border bg-bg-deep text-[10px] font-mono text-text-muted flex items-center gap-3 flex-wrap">
+          <span>rows delta: {compareMetricDelta(compareState.leftResult.rowCount, compareState.rightResult.rowCount)}</span>
+          <span>cols delta: {compareMetricDelta(compareState.leftResult.columns.length, compareState.rightResult.columns.length)}</span>
+          <span>left: {compareState.leftResult.rowCount.toLocaleString()}x{compareState.leftResult.columns.length}</span>
+          <span>right: {compareState.rightResult.rowCount.toLocaleString()}x{compareState.rightResult.columns.length}</span>
         </div>
       )}
 
@@ -330,6 +416,9 @@ function CompareSideConfig({
   setLimitDraft,
   metrics,
   showControls,
+  paneRef,
+  onPaneScroll,
+  isRunning,
 }: {
   label: string
   datasets: Array<{ id: string; name: string; columns: Array<{ name: string }> }>
@@ -352,49 +441,38 @@ function CompareSideConfig({
   setLimitDraft: (v: string) => void
   metrics: string[]
   showControls: boolean
+  paneRef: RefObject<HTMLDivElement | null>
+  onPaneScroll: (event: UIEvent<HTMLDivElement>) => void
+  isRunning: boolean
 }) {
   const dataset = datasets.find((d) => d.id === datasetId)
   const columns = dataset?.columns ?? []
   const [activeControl, setActiveControl] = useState<CompareControlKey | null>('filter')
 
   function addFilter() {
-    if (!filterDraft.column || !filterDraft.operator) return
-    const clean = isNullOp(filterDraft.operator)
-      ? { ...filterDraft, value: '' }
-      : filterDraft
-    setSpec({ filters: [...spec.filters, clean] })
+    setSpec(appendFilter(spec, filterDraft))
   }
 
   function addGroup() {
-    if (!groupDraft || spec.groupBy.includes(groupDraft)) return
-    setSpec({ groupBy: [...spec.groupBy, groupDraft] })
+    setSpec(appendGroupBy(spec, groupDraft))
   }
 
   function addAgg() {
-    const next = [...spec.aggregations, { op: aggDraft.op, column: aggDraft.column }]
-    setSpec({ aggregations: next })
+    setSpec(appendAggregation(spec, aggDraft))
   }
 
   function addHaving() {
-    if (!havingDraft.metric) return
-    const raw = String(havingDraft.value).trim()
-    if (!raw) return
-    const parsed = Number(raw)
-    const val = Number.isFinite(parsed) ? parsed : raw
-    setSpec({ having: [...spec.having, { ...havingDraft, value: val }] })
+    setSpec(appendHaving(spec, havingDraft))
   }
 
   function addSort() {
-    if (!sortDraft.column) return
-    setSpec({ sort: [...spec.sort, sortDraft] })
+    setSpec(appendSort(spec, sortDraft))
   }
 
   function applyLimit() {
-    const n = Number(limitDraft)
-    if (!Number.isFinite(n)) return
-    const clamped = Math.max(1, Math.min(10000, Math.trunc(n)))
-    setLimitDraft(String(clamped))
-    setSpec({ limit: clamped })
+    const next = applyLimitValue(spec, limitDraft)
+    setLimitDraft(next.limit)
+    setSpec(next.spec)
   }
 
   return (
@@ -404,19 +482,21 @@ function CompareSideConfig({
         <span className="text-text-muted">{result ? `${result.rowCount}x${result.columns.length}` : 'not run'}</span>
       </div>
 
-      <div className="p-2 space-y-1.5 bg-bg-deep border-b border-border/60">
+      <div className="p-2 space-y-1.5 bg-bg-deep/70 border-b border-border/60">
         <select
           value={datasetId ?? ''}
           onChange={(e) => setDatasetId(e.target.value || null)}
           className={`${INPUT_CLASS} w-full`}
+          disabled={isRunning}
         >
           <option value="">Select dataset</option>
           {datasets.map((d) => (
             <option key={d.id} value={d.id}>{d.name}</option>
           ))}
         </select>
+        {!dataset && <div className="text-[10px] text-text-muted">Pick a dataset to configure this side.</div>}
         {showControls && (
-          <>
+          <fieldset className="space-y-1.5" disabled={isRunning}>
             <div className="flex items-center gap-1.5 text-[10px] font-mono flex-wrap">
               <QueryToggle label="Filter" value={String(spec.filters.length)} active={activeControl === 'filter'} onClick={() => setActiveControl((v) => (v === 'filter' ? null : 'filter'))} />
               <QueryToggle label="Analyze" value={`G${spec.groupBy.length} A${spec.aggregations.length} H${spec.having.length}`} active={activeControl === 'analyze'} onClick={() => setActiveControl((v) => (v === 'analyze' ? null : 'analyze'))} />
@@ -430,7 +510,7 @@ function CompareSideConfig({
                   {columns.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
                 </select>
                 <select value={filterDraft.operator} onChange={(e) => setFilterDraft((s) => ({ ...s, operator: e.target.value }))} className={INPUT_CLASS}>
-                  {FILTER_OPS.map((op) => <option key={op} value={op}>{op}</option>)}
+                  {FILTER_OPS.map((op) => <option key={op} value={op}>{formatFilterOp(op)}</option>)}
                 </select>
                 {!isNullOp(filterDraft.operator) && (
                   <input value={String(filterDraft.value)} onChange={(e) => setFilterDraft((s) => ({ ...s, value: e.target.value }))} className={`${INPUT_CLASS} min-w-20`} placeholder="value" />
@@ -442,11 +522,15 @@ function CompareSideConfig({
             {activeControl === 'analyze' && (
               <div className="space-y-1.5">
                 <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="w-12 text-right text-text-muted font-mono text-[10px]">Group</span>
                   <select value={groupDraft} onChange={(e) => setGroupDraft(e.target.value)} className={INPUT_CLASS}>
                     {columns.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
                   </select>
                   <button onClick={addGroup} className={ACTION_CLASS}>+ Group</button>
+                </div>
 
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="w-12 text-right text-text-muted font-mono text-[10px]">Agg</span>
                   <select value={aggDraft.op} onChange={(e) => setAggDraft((s) => ({ ...s, op: e.target.value as AggregationSpec['op'] }))} className={INPUT_CLASS}>
                     {AGG_OPS.map((op) => <option key={op} value={op}>{op}</option>)}
                   </select>
@@ -458,6 +542,7 @@ function CompareSideConfig({
                 </div>
 
                 <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="w-12 text-right text-text-muted font-mono text-[10px]">Having</span>
                   <select value={havingDraft.metric} onChange={(e) => setHavingDraft((s) => ({ ...s, metric: e.target.value }))} className={INPUT_CLASS} disabled={metrics.length === 0}>
                     {metrics.length === 0 ? <option value="">agg first</option> : metrics.map((m) => <option key={m} value={m}>{m}</option>)}
                   </select>
@@ -489,13 +574,13 @@ function CompareSideConfig({
                 <button onClick={applyLimit} className={ACTION_CLASS}>Apply</button>
               </div>
             )}
-          </>
+          </fieldset>
         )}
       </div>
 
-      <div className="px-2 py-1 border-b border-border/50 bg-bg-deep/70 flex items-center gap-1 flex-wrap">
+      <div className="px-2 py-1 border-b border-border/50 bg-bg-deep/55 flex items-center gap-1 flex-wrap">
         {spec.filters.map((f, i) => (
-          <QueryChip key={`f-${i}`} label={`${f.column} ${f.operator}${isNullOp(f.operator) ? '' : ` ${String(f.value)}`}`} onRemove={() => setSpec({ filters: spec.filters.filter((_, idx) => idx !== i) })} />
+          <QueryChip key={`f-${i}`} label={`${f.column} ${formatFilterOp(f.operator)}${isNullOp(f.operator) ? '' : ` ${String(f.value)}`}`} onRemove={() => setSpec({ filters: spec.filters.filter((_, idx) => idx !== i) })} />
         ))}
         {spec.groupBy.map((g) => (
           <QueryChip key={`g-${g}`} label={`group ${g}`} onRemove={() => setSpec({ groupBy: spec.groupBy.filter((x) => x !== g) })} />
@@ -522,7 +607,7 @@ function CompareSideConfig({
       </div>
 
       {result && (
-        <div className="overflow-auto max-h-[280px]">
+        <div ref={paneRef} onScroll={onPaneScroll} className="overflow-auto max-h-[280px]">
           <table className="w-full border-collapse text-[11px]">
             <thead className="sticky top-0 z-[1]">
               <tr className="bg-surface">
@@ -535,9 +620,9 @@ function CompareSideConfig({
             </thead>
             <tbody>
               {result.rows.map((row, i) => (
-                <tr key={i} className="border-t border-border/40 hover:bg-surface-hover/30">
+                <tr key={i} className="border-t border-border/40 bg-bg-deep/70 hover:bg-surface-hover/25">
                   {result.columns.map((col) => (
-                    <td key={col} className="px-2 py-0.5 font-mono border-r border-border/20 last:border-r-0">
+                    <td key={col} className="px-2 py-0.5 font-mono border-r border-border/20 last:border-r-0 bg-bg-deep/70">
                       {row[col] == null ? <span className="text-text-muted/40 italic">null</span> : String(row[col])}
                     </td>
                   ))}
@@ -546,6 +631,10 @@ function CompareSideConfig({
             </tbody>
           </table>
         </div>
+      )}
+
+      {!result && dataset && (
+        <div className="px-2.5 py-2 text-[10px] text-text-muted bg-bg-deep/70">Run Compare to populate results for this side.</div>
       )}
     </div>
   )

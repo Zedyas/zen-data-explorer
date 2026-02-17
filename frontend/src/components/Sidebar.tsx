@@ -106,35 +106,42 @@ export function Sidebar() {
                   <span className="ml-auto text-[9px] font-mono text-text-muted">{datasetCells.length}</span>
                 </div>
 
-                {datasetCells.map((cell) => (
-                  <div
-                    key={cell.id}
-                    onClick={() => openCell(cell.id, cell.datasetId)}
-                    className={`flex items-center gap-2 px-2 py-1 rounded text-xs cursor-pointer border ${
-                      activeCellId === cell.id && isActiveDataset && workspaceTab === 'dynamic'
-                        ? 'border-accent/40 bg-accent-dim'
-                        : 'border-transparent hover:border-border hover:bg-surface-hover/30'
-                    }`}
+                <div className="ml-3 pl-2 border-l border-border/60 space-y-1">
+                  {datasetCells.length === 0 && (
+                    <div className="px-2 py-1 text-[11px] text-text-muted">No cells yet</div>
+                  )}
+
+                  {datasetCells.map((cell, idx) => (
+                    <div
+                      key={cell.id}
+                      onClick={() => openCell(cell.id, cell.datasetId)}
+                      className={`flex items-center gap-2 px-2 py-1 rounded text-xs cursor-pointer border ${
+                        activeCellId === cell.id && isActiveDataset && workspaceTab === 'dynamic'
+                          ? 'border-accent/40 bg-accent-dim'
+                          : 'border-transparent hover:border-border hover:bg-surface-hover/30'
+                      }`}
                     >
-                    <span className="text-text-muted">
-                      {cell.type === 'compare'
-                        ? <CompareIcon />
-                        : cell.type === 'table'
-                          ? <TableIcon />
-                          : cell.type === 'python'
-                            ? <CodeIcon />
-                            : <CodeXmlIcon />}
-                    </span>
-                    <span className="text-text-secondary truncate">{cell.title}</span>
-                    {cell.result && !cell.isRunning && (
-                      <span className="text-[9px] text-success ml-auto font-mono">
-                        {cell.result.rowCount}x{cell.result.columns.length}
+                      <span className="text-[9px] text-text-muted font-mono">{idx + 1}.</span>
+                      <span className="text-text-muted">
+                        {cell.type === 'compare'
+                          ? <CompareIcon />
+                          : cell.type === 'table'
+                            ? <TableIcon />
+                            : cell.type === 'python'
+                              ? <CodeIcon />
+                              : <CodeXmlIcon />}
                       </span>
-                    )}
-                    {cell.isRunning && <span className="text-[9px] text-accent ml-auto">run</span>}
-                    {cell.error && !cell.isRunning && <span className="text-[9px] text-error ml-auto">err</span>}
-                  </div>
-                ))}
+                      <span className="text-text-secondary truncate">{cell.title}</span>
+                      {cell.result && !cell.isRunning && (
+                        <span className="text-[9px] text-success ml-auto font-mono">
+                          {cell.result.rowCount}x{cell.result.columns.length}
+                        </span>
+                      )}
+                      {cell.isRunning && <span className="text-[9px] text-accent ml-auto">run</span>}
+                      {cell.error && !cell.isRunning && <span className="text-[9px] text-error ml-auto">err</span>}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )
