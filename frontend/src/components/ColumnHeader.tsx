@@ -55,7 +55,7 @@ export function ColumnHeader({ column, sparkline, onProfileClick }: ColumnHeader
     : 0
   const nullToneClass = nullPct >= 25
     ? 'text-error'
-    : nullPct >= 10
+    : nullPct >= 5
       ? 'text-warning'
       : 'text-text-muted'
 

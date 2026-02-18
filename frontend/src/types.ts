@@ -59,15 +59,24 @@ export interface ProfileResponse {
   nonNullCount: number
   nullCount: number
   uniqueCount: number
+  coveragePct?: number
+  cardinalityPct?: number
+  cardinalityBand?: 'low' | 'medium' | 'high'
+  keyHint?: 'strong' | 'possible' | 'unlikely'
   dominantValue?: string | null
   dominantValueCount?: number
   dominantValueSharePct?: number
-  stats?: Record<string, number | null>
+  stats?: Record<string, number | string | null>
   histogram?: { bin?: number; low?: number; high?: number; label?: string; count: number }[]
   topValues?: { value: string; count: number }[]
   patternClasses?: { label: string; count: number; sharePct: number }[]
   top10CoveragePct?: number
   tailProfile?: 'low' | 'medium' | 'high'
+  sentinelCount?: number
+  sentinelTokens?: { token: string; count: number }[]
+  outlierLengthExamples?: string[]
+  lowTailValues?: { value: string; count: number }[]
+  highTailValues?: { value: string; count: number }[]
 }
 
 export interface QueryResponse {

@@ -446,17 +446,72 @@ class DuckDBEngine(Engine):
             "uniqueCount": base[3],
         }
 
+        non_null_count = int(base[1]) if base[1] is not None else 0
+        unique_count = int(base[3]) if base[3] is not None else 0
+        result["coveragePct"] = (
+            round((non_null_count / profile_size) * 100, 2) if profile_size > 0 else 0.0
+        )
+        result["cardinalityPct"] = (
+            round((unique_count / non_null_count) * 100, 2)
+            if non_null_count > 0
+            else 0.0
+        )
+        if result["cardinalityPct"] >= 80:
+            result["cardinalityBand"] = "high"
+        elif result["cardinalityPct"] >= 20:
+            result["cardinalityBand"] = "medium"
+        else:
+            result["cardinalityBand"] = "low"
+
+        if non_null_count == profile_size and unique_count == profile_size:
+            result["keyHint"] = "strong"
+        elif int(base[2]) == 0 and result["cardinalityPct"] >= 98:
+            result["keyHint"] = "possible"
+        else:
+            result["keyHint"] = "unlikely"
+
         dominant_value: str | None = None
         dominant_count = 0
 
         if app_type in ("integer", "float"):
             numeric_stats = self._profile_numeric(sample_sql, col_sql)
             if numeric_stats:
+                numeric_stats["distinctCount"] = unique_count
+                uniqueness_rate = (
+                    round((unique_count / non_null_count) * 100, 2)
+                    if non_null_count > 0
+                    else None
+                )
+                numeric_stats["uniquenessRatePct"] = uniqueness_rate
+                numeric_stats["duplicateRatePct"] = (
+                    round(100 - uniqueness_rate, 2)
+                    if uniqueness_rate is not None
+                    else None
+                )
                 numeric_stats.update(
                     self._profile_numeric_quality(
                         sample_sql, col_sql, base[1], numeric_stats
                     )
                 )
+
+                p5 = numeric_stats.get("p5")
+                p95 = numeric_stats.get("p95")
+                if isinstance(p5, (int, float)):
+                    result["lowTailValues"] = self._profile_top_values(
+                        sample_sql,
+                        col_sql,
+                        limit=5,
+                        where_sql=f"{col_sql} IS NOT NULL AND {col_sql} < ?",
+                        params=[p5],
+                    )
+                if isinstance(p95, (int, float)):
+                    result["highTailValues"] = self._profile_top_values(
+                        sample_sql,
+                        col_sql,
+                        limit=5,
+                        where_sql=f"{col_sql} IS NOT NULL AND {col_sql} > ?",
+                        params=[p95],
+                    )
             result["stats"] = numeric_stats
             result["histogram"] = self._profile_histogram_numeric(sample_sql, col_sql)
             dom = self._profile_dominant_value(sample_sql, col_sql)
@@ -486,6 +541,26 @@ class DuckDBEngine(Engine):
                 result["stats"].update(string_quality)
             elif string_quality:
                 result["stats"] = string_quality
+
+            sentinel_count, sentinel_tokens = self._profile_string_sentinels(
+                sample_sql, col_sql
+            )
+            result["sentinelCount"] = sentinel_count
+            result["sentinelTokens"] = sentinel_tokens
+
+            outlier_length_stats = self._profile_string_length_outliers(
+                sample_sql, col_sql, non_null_count
+            )
+            if outlier_length_stats:
+                if "stats" not in result:
+                    result["stats"] = {}
+                result["stats"].update(
+                    {
+                        "outlierLengthCount": outlier_length_stats["count"],
+                        "outlierLengthPct": outlier_length_stats["ratePct"],
+                    }
+                )
+                result["outlierLengthExamples"] = outlier_length_stats["examples"]
 
             pattern_classes, distinct_pattern_count = self._profile_string_patterns(
                 sample_sql, col_sql
@@ -553,9 +628,11 @@ class DuckDBEngine(Engine):
     def _profile_numeric(self, source_sql: str, col_sql: str) -> dict:
         row = self.conn.execute(
             f"SELECT MIN({col_sql}), MAX({col_sql}), "
+            f"ROUND(SUM({col_sql})::DOUBLE, 4), "
             f"ROUND(AVG({col_sql})::DOUBLE, 4), "
             f"ROUND(MEDIAN({col_sql})::DOUBLE, 4), "
             f"ROUND(STDDEV({col_sql})::DOUBLE, 4), "
+            f"ROUND(QUANTILE_CONT({col_sql}, 0.05)::DOUBLE, 4), "
             f"ROUND(QUANTILE_CONT({col_sql}, 0.25)::DOUBLE, 4), "
             f"ROUND(QUANTILE_CONT({col_sql}, 0.75)::DOUBLE, 4), "
             f"ROUND(QUANTILE_CONT({col_sql}, 0.95)::DOUBLE, 4), "
@@ -564,16 +641,28 @@ class DuckDBEngine(Engine):
         ).fetchone()
         if not row or row[0] is None:
             return {}
+
+        min_val = self._safe_number(row[0])
+        max_val = self._safe_number(row[1])
+        p25 = self._safe_number(row[7])
+        p75 = self._safe_number(row[8])
+        iqr = None
+        if isinstance(p25, (int, float)) and isinstance(p75, (int, float)):
+            iqr = self._safe_number(float(p75) - float(p25))
+
         return {
-            "min": self._safe_number(row[0]),
-            "max": self._safe_number(row[1]),
-            "mean": self._safe_number(row[2]),
-            "median": self._safe_number(row[3]),
-            "stddev": self._safe_number(row[4]),
-            "p25": self._safe_number(row[5]),
-            "p75": self._safe_number(row[6]),
-            "p95": self._safe_number(row[7]),
-            "p99": self._safe_number(row[8]),
+            "min": min_val,
+            "max": max_val,
+            "sum": self._safe_number(row[2]),
+            "mean": self._safe_number(row[3]),
+            "median": self._safe_number(row[4]),
+            "stddev": self._safe_number(row[5]),
+            "p5": self._safe_number(row[6]),
+            "p25": p25,
+            "p75": p75,
+            "p95": self._safe_number(row[9]),
+            "p99": self._safe_number(row[10]),
+            "iqr": iqr,
         }
 
     def _profile_histogram_numeric(
@@ -618,13 +707,21 @@ class DuckDBEngine(Engine):
         return [{"label": str(r[0])[:7], "count": r[1]} for r in rows]
 
     def _profile_top_values(
-        self, source_sql: str, col_sql: str, limit: int = 10
+        self,
+        source_sql: str,
+        col_sql: str,
+        limit: int = 10,
+        where_sql: str | None = None,
+        params: list[Any] | None = None,
     ) -> list[dict]:
+        where_clause = (
+            f"WHERE {where_sql}" if where_sql else f"WHERE {col_sql} IS NOT NULL"
+        )
         rows = self.conn.execute(
             f"SELECT {col_sql}, COUNT(*) AS cnt FROM {source_sql} "
-            f"WHERE {col_sql} IS NOT NULL GROUP BY {col_sql} "
+            f"{where_clause} GROUP BY {col_sql} "
             f"ORDER BY cnt DESC LIMIT ?",
-            [limit],
+            [*(params or []), limit],
         ).fetchall()
         return [{"value": str(r[0]), "count": r[1]} for r in rows]
 
@@ -669,7 +766,10 @@ class DuckDBEngine(Engine):
 
         p25 = numeric_stats.get("p25")
         p75 = numeric_stats.get("p75")
+        p5 = numeric_stats.get("p5")
+        p95 = numeric_stats.get("p95")
         outlier_rate_pct: float | None = None
+        outlier_count = 0
         if isinstance(p25, (int, float)) and isinstance(p75, (int, float)):
             iqr = float(p75) - float(p25)
             low = float(p25) - 1.5 * iqr
@@ -682,10 +782,32 @@ class DuckDBEngine(Engine):
             outlier_count = int(outlier_row[0]) if outlier_row else 0
             outlier_rate_pct = round((outlier_count / non_null_count) * 100, 2)
 
+        low_tail_count = 0
+        high_tail_count = 0
+        if isinstance(p5, (int, float)):
+            low_tail_row = self.conn.execute(
+                f"SELECT COUNT(*) FROM {source_sql} "
+                f"WHERE {col_sql} IS NOT NULL AND {col_sql} < ?",
+                [p5],
+            ).fetchone()
+            low_tail_count = int(low_tail_row[0]) if low_tail_row else 0
+        if isinstance(p95, (int, float)):
+            high_tail_row = self.conn.execute(
+                f"SELECT COUNT(*) FROM {source_sql} "
+                f"WHERE {col_sql} IS NOT NULL AND {col_sql} > ?",
+                [p95],
+            ).fetchone()
+            high_tail_count = int(high_tail_row[0]) if high_tail_row else 0
+
         return {
             "zeroRatePct": round((zero_count / non_null_count) * 100, 2),
             "negativeRatePct": round((neg_count / non_null_count) * 100, 2),
+            "outlierCount": outlier_count,
             "outlierRatePct": outlier_rate_pct,
+            "lowTailCount": low_tail_count,
+            "lowTailRatePct": round((low_tail_count / non_null_count) * 100, 2),
+            "highTailCount": high_tail_count,
+            "highTailRatePct": round((high_tail_count / non_null_count) * 100, 2),
         }
 
     def _profile_date_gaps(self, source_sql: str, col_sql: str) -> dict[str, Any]:
@@ -734,6 +856,88 @@ class DuckDBEngine(Engine):
         return {
             "blankWhitespaceCount": blank_count,
             "blankWhitespacePct": round((blank_count / non_null_count) * 100, 2),
+        }
+
+    def _profile_string_sentinels(
+        self, source_sql: str, col_sql: str
+    ) -> tuple[int, list[dict[str, Any]]]:
+        rows = self.conn.execute(
+            f"WITH vals AS ("
+            f"  SELECT CASE "
+            f"    WHEN LENGTH(CAST({col_sql} AS VARCHAR)) = 0 THEN '__empty__' "
+            f"    WHEN LENGTH(TRIM(CAST({col_sql} AS VARCHAR))) = 0 THEN '__whitespace__' "
+            f"    ELSE LOWER(TRIM(CAST({col_sql} AS VARCHAR))) "
+            f"  END AS sentinel_key "
+            f"  FROM {source_sql} "
+            f"  WHERE {col_sql} IS NOT NULL"
+            f") "
+            f"SELECT sentinel_key, COUNT(*) AS cnt "
+            f"FROM vals "
+            f"WHERE sentinel_key IN ('na', 'n/a', 'null', 'none', '-', '__empty__', '__whitespace__') "
+            f"GROUP BY sentinel_key "
+            f"ORDER BY cnt DESC, sentinel_key ASC"
+        ).fetchall()
+
+        display_map = {
+            "__empty__": "(empty)",
+            "__whitespace__": "(whitespace)",
+        }
+        tokens: list[dict[str, Any]] = [
+            {
+                "token": display_map.get(str(r[0]), str(r[0])),
+                "count": int(r[1]),
+            }
+            for r in rows
+        ]
+        sentinel_count = sum(int(r[1]) for r in rows)
+        return sentinel_count, tokens
+
+    def _profile_string_length_outliers(
+        self, source_sql: str, col_sql: str, non_null_count: int
+    ) -> dict[str, Any]:
+        if non_null_count <= 0:
+            return {}
+
+        stats_row = self.conn.execute(
+            f"SELECT AVG(LENGTH(CAST({col_sql} AS VARCHAR)))::DOUBLE, "
+            f"STDDEV_POP(LENGTH(CAST({col_sql} AS VARCHAR)))::DOUBLE "
+            f"FROM {source_sql} WHERE {col_sql} IS NOT NULL"
+        ).fetchone()
+        if not stats_row or stats_row[0] is None:
+            return {}
+
+        mean_len = float(stats_row[0])
+        std_len = float(stats_row[1]) if stats_row[1] is not None else 0.0
+        if std_len <= 0:
+            return {
+                "count": 0,
+                "ratePct": 0.0,
+                "examples": [],
+            }
+
+        outlier_count_row = self.conn.execute(
+            f"SELECT COUNT(*) FROM {source_sql} "
+            f"WHERE {col_sql} IS NOT NULL "
+            f"AND ABS(LENGTH(CAST({col_sql} AS VARCHAR)) - ?) > ?",
+            [mean_len, 2 * std_len],
+        ).fetchone()
+        outlier_count = int(outlier_count_row[0]) if outlier_count_row else 0
+
+        example_rows = self.conn.execute(
+            f"SELECT DISTINCT CAST({col_sql} AS VARCHAR) AS v "
+            f"FROM {source_sql} "
+            f"WHERE {col_sql} IS NOT NULL "
+            f"AND ABS(LENGTH(CAST({col_sql} AS VARCHAR)) - ?) > ? "
+            f"ORDER BY ABS(LENGTH(CAST({col_sql} AS VARCHAR)) - ?) DESC "
+            f"LIMIT 5",
+            [mean_len, 2 * std_len, mean_len],
+        ).fetchall()
+
+        examples = [str(r[0])[:80] for r in example_rows]
+        return {
+            "count": outlier_count,
+            "ratePct": round((outlier_count / non_null_count) * 100, 2),
+            "examples": examples,
         }
 
     def _profile_string_patterns(

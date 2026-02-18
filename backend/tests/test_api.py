@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sys
 
+
 from fastapi.testclient import TestClient
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -123,6 +124,53 @@ def test_schema_includes_column_sparklines() -> None:
         assert "sparkline" in col
         assert isinstance(col["sparkline"], list)
         assert len(col["sparkline"]) <= 8
+
+
+def test_profile_string_includes_sentinel_and_outlier_metrics(tmp_path: Path) -> None:
+    csv_path = tmp_path / "sentinel_profile.csv"
+    csv_path.write_text(
+        "value\n"
+        "NA\n"
+        "n/a\n"
+        "NULL\n"
+        "-\n"
+        '" "\n'
+        '""\n'
+        "ok\n"
+        "THIS_IS_A_VERY_LONG_STRING_VALUE_FOR_OUTLIER_CHECKING_123456789\n",
+        encoding="utf-8",
+    )
+    dataset_id = app_module.engine.load_file(str(csv_path), "sentinel_profile.csv")
+
+    resp = client.get(f"/api/datasets/{dataset_id}/profile/value")
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["type"] == "string"
+    assert "sentinelCount" in payload
+    assert payload["sentinelCount"] >= 4
+    assert "sentinelTokens" in payload
+    assert isinstance(payload["sentinelTokens"], list)
+    assert "stats" in payload
+    assert "outlierLengthCount" in payload["stats"]
+
+
+def test_profile_numeric_includes_phase1_metrics() -> None:
+    dataset_id = _dataset_id()
+    resp = client.get(f"/api/datasets/{dataset_id}/profile/amount")
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["type"] in {"integer", "float"}
+    stats = payload.get("stats") or {}
+    for key in [
+        "sum",
+        "iqr",
+        "distinctCount",
+        "uniquenessRatePct",
+        "duplicateRatePct",
+        "lowTailRatePct",
+        "highTailRatePct",
+    ]:
+        assert key in stats
 
 
 def test_page_rejects_non_array_filters_payload() -> None:

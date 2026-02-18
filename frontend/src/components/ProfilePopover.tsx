@@ -35,22 +35,36 @@ export function ProfilePopover({ anchorRect }: { anchorRect: DOMRect | null }) {
 
   if (!profileColumn || !anchorRect) return null
 
-  // Position: below the column header, clamped to viewport
-  const left = Math.min(anchorRect.left, window.innerWidth - 340)
-  const top = anchorRect.bottom + 4
+  const viewportPadding = 8
+  const panelWidth = 320
+  const left = Math.min(
+    Math.max(viewportPadding, anchorRect.left),
+    window.innerWidth - panelWidth - viewportPadding,
+  )
+  const spaceBelow = window.innerHeight - anchorRect.bottom - viewportPadding
+  const spaceAbove = anchorRect.top - viewportPadding
+  const placeBelow = spaceBelow >= 300 || spaceBelow >= spaceAbove
+  const availableHeight = Math.max(
+    260,
+    Math.min(560, placeBelow ? spaceBelow : spaceAbove),
+  )
+  const top = placeBelow
+    ? anchorRect.bottom + 4
+    : Math.max(viewportPadding, anchorRect.top - availableHeight - 4)
+  const contentMaxHeight = Math.max(160, availableHeight - 44)
 
   return (
     <div
       ref={ref}
       className="fixed z-50 w-80 gradient-border-subtle rounded-lg overflow-hidden"
-      style={{ left, top, maxHeight: 'calc(100vh - 100px)' }}
+      style={{ left, top, maxHeight: availableHeight }}
     >
       {/* Header */}
       <div className="px-3 py-2 border-b border-border-strong bg-surface flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-text">{profileColumn}</span>
           {profile && (
-              <span className="text-[10px] font-mono text-text-muted px-1 py-px rounded border border-border bg-surface-elevated">
+              <span className={`type-badge-${profile.type} text-[10px] font-mono px-1 py-px rounded border`}>
                 {profile.type}
               </span>
             )}
@@ -64,7 +78,7 @@ export function ProfilePopover({ anchorRect }: { anchorRect: DOMRect | null }) {
       </div>
 
       {/* Content */}
-      <div className="overflow-y-auto bg-surface-elevated" style={{ maxHeight: 'calc(100vh - 160px)' }}>
+      <div className="overflow-y-auto bg-surface-elevated" style={{ maxHeight: contentMaxHeight }}>
         {isLoading ? (
           <div className="flex items-center justify-center py-8 text-sm text-text-muted">
             Profiling...
@@ -83,20 +97,21 @@ function ProfileContent({ profile }: { profile: ProfileResponse }) {
   const nonNullPct = ((1 - nullRate) * 100).toFixed(1)
   const cardinalityPct = profile.nonNullCount > 0 ? (profile.uniqueCount / profile.nonNullCount) * 100 : 0
   const sampleTag = profile.sampled ? ' (sample)' : ''
-  const profiledRowsLabel = profile.sampled ? 'Rows sampled' : 'Rows in dataset'
+  const profiledRowsLabel = 'Profiled rows'
   const isStringType = profile.type === 'string'
   const isBooleanType = profile.type === 'boolean'
   const blankWhitespaceCount = isStringType && profile.stats ? statNum(profile.stats, 'blankWhitespaceCount') : null
   const blankWhitespaceRate = isStringType && profile.nonNullCount > 0 && blankWhitespaceCount != null
     ? blankWhitespaceCount / profile.nonNullCount
     : null
-  const cardinalityLabel = cardinalityPct >= 80 ? 'high' : cardinalityPct >= 20 ? 'medium' : 'low'
+  const cardinalityLabel = profile.cardinalityBand ?? (cardinalityPct >= 80 ? 'high' : cardinalityPct >= 20 ? 'medium' : 'low')
   const keyHint =
-    profile.nonNullCount === profiledRows && profile.uniqueCount === profiledRows
+    profile.keyHint ??
+    (profile.nonNullCount === profiledRows && profile.uniqueCount === profiledRows
       ? 'strong'
       : profile.nullCount === 0 && cardinalityPct >= 98
         ? 'possible'
-        : 'unlikely'
+        : 'unlikely')
   const dominantText =
     profile.dominantValue === 'none'
       ? 'none'
@@ -257,25 +272,42 @@ function NumericProfile({ profile }: { profile: ProfileResponse }) {
   const zeroRate = statNum(s, 'zeroRatePct')
   const negativeRate = statNum(s, 'negativeRatePct')
   const outlierRate = statNum(s, 'outlierRatePct')
+  const uniquenessRate = statNum(s, 'uniquenessRatePct')
+  const duplicateRate = statNum(s, 'duplicateRatePct')
+  const lowTailRate = statNum(s, 'lowTailRatePct')
+  const highTailRate = statNum(s, 'highTailRatePct')
 
   return (
     <>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-        <StatsRow label="Min" value={fmt(s.min)} />
-        <StatsRow label="Max" value={fmt(s.max)} />
-        <StatsRow label="Mean" value={fmt(s.mean)} />
-        <StatsRow label="Median" value={fmt(s.median)} />
-        <StatsRow label="Std Dev" value={fmt(s.stddev)} />
-        <StatsRow label="P25" value={fmt(s.p25)} />
-        <StatsRow label="P75" value={fmt(s.p75)} />
-        <StatsRow label="P95" value={fmt(s.p95)} />
-        <StatsRow label="P99" value={fmt(s.p99)} />
+        <StatsRow label="Min" value={fmt(statNum(s, 'min'))} />
+        <StatsRow label="Max" value={fmt(statNum(s, 'max'))} />
+        <StatsRow label="Sum" value={fmt(statNum(s, 'sum'))} />
+        <StatsRow label="IQR" value={fmt(statNum(s, 'iqr'))} />
+        <StatsRow label="Mean" value={fmt(statNum(s, 'mean'))} />
+        <StatsRow label="Median" value={fmt(statNum(s, 'median'))} />
+        <StatsRow label="Std Dev" value={fmt(statNum(s, 'stddev'))} />
+        <StatsRow label="P5" value={fmt(statNum(s, 'p5'))} />
+        <StatsRow label="P25" value={fmt(statNum(s, 'p25'))} />
+        <StatsRow label="P75" value={fmt(statNum(s, 'p75'))} />
+        <StatsRow label="P95" value={fmt(statNum(s, 'p95'))} />
+        <StatsRow label="P99" value={fmt(statNum(s, 'p99'))} />
       </div>
 
       <div className="grid grid-cols-3 gap-2 text-xs">
         <StatBox label="Zero rate" value={pct(zeroRate)} />
         <StatBox label="Neg rate" value={pct(negativeRate)} />
         <StatBox label="Outlier rate" value={pct(outlierRate)} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <StatBox label="Unique rate" value={pct(uniquenessRate)} />
+        <StatBox label="Duplicate rate" value={pct(duplicateRate)} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <StatBox label="Low tail (< P5)" value={pct(lowTailRate)} />
+        <StatBox label="High tail (> P95)" value={pct(highTailRate)} />
       </div>
 
       {profile.histogram && profile.histogram.length > 0 && (
@@ -290,6 +322,11 @@ function StringProfile({ profile }: { profile: ProfileResponse }) {
   const distinctPatternCount = s ? statNum(s, 'distinctPatternCount') : null
   const top10Coverage = typeof profile.top10CoveragePct === 'number' ? profile.top10CoveragePct : null
   const tailProfile = profile.tailProfile ?? 'low'
+  const outlierLengthCount = s ? statNum(s, 'outlierLengthCount') : null
+  const outlierLengthPct = s ? statNum(s, 'outlierLengthPct') : null
+  const sentinelCount = profile.sentinelCount ?? 0
+  const sentinelTokens = profile.sentinelTokens ?? []
+  const outlierExamples = profile.outlierLengthExamples ?? []
 
   return (
     <>
@@ -305,6 +342,32 @@ function StringProfile({ profile }: { profile: ProfileResponse }) {
         <StatBox label="Distinct patterns" value={distinctPatternCount == null ? '-' : String(Math.trunc(distinctPatternCount))} />
         <StatBox label="Top 10 coverage" value={pct(top10Coverage)} />
       </div>
+
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <StatBox label="Sentinel count" value={sentinelCount.toLocaleString()} />
+        <StatBox
+          label="Outlier lengths"
+          value={outlierLengthCount == null ? '-' : `${Math.trunc(outlierLengthCount).toLocaleString()} · ${pct(outlierLengthPct)}`}
+        />
+      </div>
+
+      {sentinelTokens.length > 0 && (
+        <div>
+          <div className="text-[10px] text-text-muted mb-1">Sentinel values</div>
+          <div className="flex flex-wrap gap-1">
+            {sentinelTokens.map((t) => (
+              <span key={`${t.token}-${t.count}`} className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[10px] font-mono text-text-secondary">
+                <span>{t.token}</span>
+                <span className="text-text-muted">{t.count}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {outlierExamples.length > 0 && (
+        <StatBox label="Outlier examples" value={outlierExamples.slice(0, 3).join(', ')} />
+      )}
 
       <div className="flex items-center gap-1.5 flex-wrap">
         <SignalChip label="Tail profile" value={tailProfile} />
@@ -450,7 +513,7 @@ function fmt(val: number | null | undefined): string {
   return val.toLocaleString(undefined, { maximumFractionDigits: 4 })
 }
 
-function statNum(stats: Record<string, number | null>, key: string): number | null {
+function statNum(stats: Record<string, number | string | null>, key: string): number | null {
   const v = stats[key]
   return typeof v === 'number' ? v : null
 }
@@ -463,7 +526,7 @@ function pct(value: number | null): string {
 function ratioTone(ratio: number | null): 'neutral' | 'medium' | 'high' {
   if (ratio == null) return 'neutral'
   if (ratio >= 0.25) return 'high'
-  if (ratio >= 0.1) return 'medium'
+  if (ratio >= 0.05) return 'medium'
   return 'neutral'
 }
 
