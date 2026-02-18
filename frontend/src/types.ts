@@ -77,31 +77,9 @@ export interface QueryResponse {
   executionTime: number
 }
 
-export interface SqlCell {
-  id: string
-  sql: string
-  result: QueryResponse | null
-  error: string | null
-  isRunning: boolean
-}
+export type WorkspaceTab = 'overview' | 'notebook'
 
-export type WorkspaceTab = 'overview' | 'dynamic'
-
-export type NotebookView = 'insights' | 'transformations'
-
-export type LabModule =
-  | 'missingness'
-  | 'validation'
-  | 'keys'
-  | 'outliers'
-  | 'relationships'
-  | 'univariate'
-  | 'sampling'
-  | 'parse_cast'
-  | 'sentinel'
-  | 'freshness'
-
-export type CellType = 'table' | 'sql' | 'python' | 'compare' | 'lab'
+export type CellType = 'table' | 'compare'
 
 export interface AggregationSpec {
   op: 'count' | 'sum' | 'avg' | 'min' | 'max'
@@ -143,8 +121,6 @@ export interface InvestigationCell {
   title: string
   datasetId?: string
   tableSpec?: TableQuerySpec
-  sql?: string
-  python?: string
   compare?: {
     leftDatasetId: string | null
     rightDatasetId: string | null
@@ -156,14 +132,6 @@ export interface InvestigationCell {
   compareUi?: {
     showControls: boolean
     syncScroll: boolean
-  }
-  lab?: {
-    sourceCellId: string | null
-    activeModule: LabModule
-    maxColumns: number
-    nullThresholdPct: number
-    uniqueFloorPct: number
-    modules?: LabModule[]
   }
   autoRun?: boolean
   result: QueryResponse | TableQueryResponse | null

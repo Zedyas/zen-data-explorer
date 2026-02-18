@@ -5,7 +5,6 @@ import type {
   Dataset,
   Filter,
   InvestigationCell,
-  NotebookView,
   TableQuerySpec,
   WorkspaceTab,
 } from './types.ts'
@@ -83,8 +82,6 @@ interface AppState {
 
   workspaceTab: WorkspaceTab
   setWorkspaceTab: (tab: WorkspaceTab) => void
-  notebookView: NotebookView
-  setNotebookView: (view: NotebookView) => void
 
   columnStats: Map<string, { nullPercent: number; sparkline: number[] }>
   setColumnStats: (stats: Map<string, { nullPercent: number; sparkline: number[] }>) => void
@@ -240,8 +237,6 @@ export const useAppStore = create<AppState>((set) => ({
 
   workspaceTab: 'overview',
   setWorkspaceTab: (tab) => set({ workspaceTab: tab }),
-  notebookView: 'insights',
-  setNotebookView: (view) => set({ notebookView: view }),
 
   columnStats: new Map(),
   setColumnStats: (stats) => set({ columnStats: stats }),
@@ -268,11 +263,6 @@ export const useAppStore = create<AppState>((set) => ({
         type === 'table' &&
         !!activeDataset &&
         s.cells.filter((c) => c.type === 'table' && c.datasetId === activeDataset.id).length === 0
-      const defaultLabSource = activeDataset
-        ? s.cells
-          .filter((c) => c.type === 'table' && c.datasetId === activeDataset.id && !!c.result)
-          .at(-1)?.id ?? null
-        : null
       const id = `${type}_${++cellIdCounter}_${Date.now()}`
       const cell: InvestigationCell = {
         id,
@@ -280,27 +270,10 @@ export const useAppStore = create<AppState>((set) => ({
         title:
           type === 'table'
             ? `Table ${s.cells.length + 1}`
-            : type === 'sql'
-              ? `SQL ${s.cells.length + 1}`
-              : type === 'python'
-                ? `Python ${s.cells.length + 1}`
-                : type === 'compare'
-                  ? `Compare ${s.cells.length + 1}`
-                  : `Lab ${s.cells.length + 1}`,
+            : `Compare ${s.cells.length + 1}`,
         datasetId: activeDataset?.id,
         tableSpec: type === 'table' ? (firstTableCell ? baseSpec : defaultTableSpec()) : undefined,
-        sql: type === 'sql' ? 'SELECT * FROM data LIMIT 50' : undefined,
-        python: type === 'python' ? 'df.head(50)' : undefined,
         compare: type === 'compare' ? buildCompareState(activeDataset?.id, s.datasets) : undefined,
-        lab: type === 'lab'
-          ? {
-            sourceCellId: defaultLabSource,
-            activeModule: 'missingness',
-            maxColumns: 8,
-            nullThresholdPct: 10,
-            uniqueFloorPct: 95,
-          }
-          : undefined,
         autoRun: type === 'table' ? firstTableCell : false,
         result: null,
         error: null,
@@ -310,7 +283,7 @@ export const useAppStore = create<AppState>((set) => ({
       return {
         cells: [...s.cells, cell],
         activeCellId: id,
-        workspaceTab: 'dynamic',
+        workspaceTab: 'notebook',
       }
     }),
   updateCell: (id, updates) =>

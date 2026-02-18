@@ -44,7 +44,7 @@ export function TopBar() {
   }
 
   return (
-    <div className="h-9 flex items-center gap-3 px-3 border-b border-border panel-surface shrink-0">
+    <div className="h-12 flex items-center gap-3 px-3 border-b border-border panel-surface shrink-0">
       {/* Sidebar toggle */}
       <button
         onClick={toggleSidebar}
@@ -60,14 +60,13 @@ export function TopBar() {
       {/* Separator */}
       <div className="w-px h-4 bg-border" />
 
-      {/* Dataset info */}
       <div className="flex items-center gap-2 min-w-0">
-        <span className="text-sm font-medium text-text truncate">{dataset.name}</span>
-        <span className="px-1.5 py-0.5 rounded bg-surface-elevated font-mono text-xs text-text-muted shrink-0">
+        <span className="text-[16px] font-medium text-text truncate">{dataset.name}</span>
+        <span className="px-1.5 py-0.5 border border-border bg-bg font-mono text-xs text-text-muted shrink-0">
           {formatCount(dataset.rowCount)} x {dataset.columns.length}
         </span>
         {datasets.length > 1 && (
-          <span className="px-1.5 py-0.5 rounded border border-border-strong bg-surface text-[10px] text-text-muted font-mono">
+          <span className="px-1.5 py-0.5 border border-border bg-bg text-[10px] text-text-muted font-mono">
             {datasets.length} instances
           </span>
         )}
@@ -79,7 +78,7 @@ export function TopBar() {
       {/* Actions */}
       <button
         onClick={() => fileInputRef.current?.click()}
-        className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
+        className="flex items-center gap-1.5 px-2 py-1 text-xs text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
         title="Add another dataset"
       >
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -90,7 +89,7 @@ export function TopBar() {
 
       <button
         onClick={handleExport}
-        className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
+        className="flex items-center gap-1.5 px-2 py-1 text-xs text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
         title="Export filtered data as CSV"
       >
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">

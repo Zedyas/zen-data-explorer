@@ -1,37 +1,33 @@
 @import "tailwindcss";
 
-/* ── Hex Dark + Teal Accent ── */
-
 @theme {
-  --color-bg: #0d1419;
-  --color-bg-deep: #080c10;
-  --color-surface: #131d24;
-  --color-surface-elevated: #19262f;
-  --color-surface-hover: #1e2e38;
+  --color-bg: #1a1d21;
+  --color-bg-deep: #16191d;
+  --color-surface: #22262b;
+  --color-surface-elevated: #272c32;
+  --color-surface-hover: #2f353d;
 
-  --color-border: rgba(255, 255, 255, 0.09);
+  --color-border: rgba(255, 255, 255, 0.08);
   --color-border-strong: rgba(255, 255, 255, 0.14);
-  --color-border-active: rgba(45, 212, 191, 0.35);
+  --color-border-active: rgba(99, 102, 241, 0.6);
 
-  --color-accent: #2dd4bf;
-  --color-accent-hover: #5eead4;
-  --color-accent-muted: rgba(45, 212, 191, 0.12);
-  --color-accent-dim: rgba(45, 212, 191, 0.07);
+  --color-accent: #6366f1;
+  --color-accent-hover: #818cf8;
+  --color-accent-muted: rgba(99, 102, 241, 0.14);
+  --color-accent-dim: rgba(99, 102, 241, 0.08);
 
-  --color-text: #dce8f5;
-  --color-text-secondary: #7c90ab;
-  --color-text-muted: #4d6070;
-  --color-text-inverse: #0d1419;
+  --color-text: #e2e8f0;
+  --color-text-secondary: #8b93a0;
+  --color-text-muted: #5a6270;
+  --color-text-inverse: #1a1d21;
 
-  --color-success: #34d399;
-  --color-warning: #fbbf24;
-  --color-error: #f87171;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
 
-  --font-sans: "Geist", system-ui, -apple-system, sans-serif;
+  --font-sans: "Satoshi", "Geist", "Avenir Next", "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
 }
-
-/* ── Base ── */
 
 * {
   box-sizing: border-box;
@@ -44,8 +40,7 @@ html {
 body {
   margin: 0;
   font-family: var(--font-sans);
-  /* Very subtle blue-teal sweep across the canvas */
-  background: linear-gradient(155deg, #09101a 0%, #0d1419 50%, #0c1318 100%);
+  background: radial-gradient(1200px 700px at 15% -10%, #222731 0%, #1a1d21 55%, #191c20 100%);
   background-attachment: fixed;
   color: var(--color-text);
   font-size: 13px;
@@ -54,33 +49,17 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Subtle gradient surfaces ──
-   Apply to structural panels for depth without distraction.
-── */
-
-/* TopBar, FilterToolbar, dropdowns */
 .panel-surface {
-  background: linear-gradient(160deg, #151f29 0%, #131d24 55%, #121b22 100%);
+  background: var(--color-surface);
 }
 
-/* Table header, pagination bar, cell canvas toolbar */
 .panel-surface-elevated {
-  background: linear-gradient(160deg, #1c2a36 0%, #19262f 55%, #172330 100%);
+  background: var(--color-surface-elevated);
 }
 
-/* Sidebar, StatusBar — deepest layer */
 .panel-deep {
-  background: linear-gradient(175deg, #07090e 0%, #080c10 65%, #090f15 100%);
+  background: #1e2126;
 }
-
-/* ── Table column separator ──
-   More visible than the general border token — gives the grid structure.
-── */
-.table-col-sep {
-  border-right: 1px solid rgba(255, 255, 255, 0.11);
-}
-
-/* ── Scrollbar ── */
 
 ::-webkit-scrollbar {
   width: 6px;
@@ -92,82 +71,97 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.09);
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.11);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.18);
 }
-
-/* ── Selection ── */
 
 ::selection {
   background: var(--color-accent-muted);
   color: var(--color-text);
 }
 
-/* ── Focus rings ── */
-
 :focus-visible {
   outline: 1px solid var(--color-accent);
   outline-offset: 1px;
 }
 
-/* ── Type badge colors ── */
-
 .type-badge-string {
-  color: #a78bfa;
-  background: rgba(167, 139, 250, 0.12);
+  color: #c4b5fd;
+  border-color: rgba(196, 181, 253, 0.45);
+  background: rgba(196, 181, 253, 0.14);
 }
 
 .type-badge-integer,
 .type-badge-float {
-  color: #2dd4bf;
-  background: rgba(45, 212, 191, 0.12);
+  color: #93c5fd;
+  border-color: rgba(147, 197, 253, 0.5);
+  background: rgba(147, 197, 253, 0.14);
 }
 
 .type-badge-date {
-  color: #34d399;
-  background: rgba(52, 211, 153, 0.12);
+  color: #86efac;
+  border-color: rgba(134, 239, 172, 0.45);
+  background: rgba(134, 239, 172, 0.14);
 }
 
 .type-badge-boolean {
-  color: #fbbf24;
-  background: rgba(251, 191, 36, 0.12);
+  color: #fcd34d;
+  border-color: rgba(252, 211, 77, 0.5);
+  background: rgba(252, 211, 77, 0.14);
 }
 
-/* ── Sparkline ── */
-
 .sparkline-bar {
-  background: rgba(45, 212, 191, 0.32);
+  background: rgba(129, 140, 248, 0.35);
   transition: background 0.15s;
 }
 
 .sparkline-bar:hover {
-  background: rgba(45, 212, 191, 0.58);
+  background: rgba(129, 140, 248, 0.65);
 }
 
-/* ── Animations ── */
-
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slideDown {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.97); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .animate-fade-in {
@@ -186,21 +180,12 @@ body {
   animation: scaleIn 0.15s ease-out;
 }
 
-/* ── Gradient shimmer borders ──
-   Applied ONLY to floating/active surfaces that need to pop.
-   NOT applied to utility classes — all other borders are flat rgba.
-── */
-
 .gradient-border-active {
-  border: 1px solid transparent;
-  background:
-    linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
-    linear-gradient(120deg, rgba(45, 212, 191, 0.65), rgba(45, 212, 191, 0.18), rgba(45, 212, 191, 0.65)) border-box;
+  border: 1px solid var(--color-border-active);
+  background: var(--color-surface);
 }
 
 .gradient-border-subtle {
-  border: 1px solid transparent;
-  background:
-    linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
-    linear-gradient(120deg, rgba(45, 212, 191, 0.22), rgba(45, 212, 191, 0.05), rgba(45, 212, 191, 0.22)) border-box;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
 }

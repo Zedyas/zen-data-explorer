@@ -1,10 +1,7 @@
 import { useAppStore } from '../store.ts'
 import {
-  CodeIcon,
-  CodeXmlIcon,
   CompareIcon,
   DynamicIcon,
-  LabIcon,
   OverviewDatabaseIcon,
   OverviewFileIcon,
   TableIcon,
@@ -29,8 +26,12 @@ export function Sidebar() {
     }
 
     if (tryScroll()) return
-    setTimeout(() => { void tryScroll() }, 40)
-    setTimeout(() => { void tryScroll() }, 120)
+    setTimeout(() => {
+      void tryScroll()
+    }, 40)
+    setTimeout(() => {
+      void tryScroll()
+    }, 120)
   }
 
   function openOverviewFor(datasetId: string) {
@@ -40,116 +41,123 @@ export function Sidebar() {
     scrollToTarget('overview-view')
   }
 
-  function openDynamicFor(datasetId: string, defaultCellId: string | null) {
+  function openNotebookFor(datasetId: string, defaultCellId: string | null) {
     switchDataset(datasetId)
-    setWorkspaceTab('dynamic')
+    setWorkspaceTab('notebook')
     setActiveCell(defaultCellId)
   }
 
   function openCell(cellId: string, datasetId: string | undefined) {
     if (datasetId) switchDataset(datasetId)
-    setWorkspaceTab('dynamic')
+    setWorkspaceTab('notebook')
     setActiveCell(cellId)
     scrollToTarget(`cell-${cellId}`)
   }
 
   return (
-    <div className="w-64 border-r border-border-strong panel-deep flex flex-col shrink-0">
-      <div className="px-3 py-2 border-b border-border-strong">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Instances</span>
+    <aside className="w-64 h-full border-r border-border panel-deep flex flex-col shrink-0">
+      <div className="h-9 px-4 border-b border-border flex items-center">
+        <span className="text-[14px] uppercase tracking-[0.18em] font-mono text-text-secondary">Datasets</span>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2 space-y-2">
-        {datasets.length === 0 && (
-          <div className="text-xs text-text-muted px-1 py-2">No dataset loaded.</div>
-        )}
+      <div className="flex-1 overflow-y-auto py-3">
+        {datasets.length === 0 && <div className="px-4 py-3 text-xs text-text-secondary">No dataset loaded.</div>}
 
         {datasets.map((d) => {
           const isActiveDataset = dataset?.id === d.id
           const datasetCells = cells.filter((c) => c.datasetId === d.id)
 
           return (
-            <div key={d.id} className="rounded border border-border/60 bg-surface/40">
-              <div
+            <section key={d.id} className="px-4 py-2.5">
+              <button
                 onClick={() => switchDataset(d.id)}
-                className={`px-2 py-1.5 text-xs font-medium cursor-pointer border-b border-border/60 ${
-                  isActiveDataset ? 'text-text bg-surface-elevated' : 'text-text-secondary hover:bg-surface-hover/30'
-                }`}
+                className={`w-full text-left transition-colors ${isActiveDataset ? 'text-text' : 'text-text-secondary hover:text-text'}`}
                 title={d.name}
               >
-                <div className="truncate">{d.name}</div>
-                <div className="text-[10px] text-text-muted font-mono mt-0.5">{d.rowCount.toLocaleString()}x{d.columns.length}</div>
-              </div>
+                <div className="text-sm font-medium truncate leading-tight">{d.name}</div>
+              </button>
 
-              <div className="p-1 space-y-1">
-                <div
+              <div className="mt-2 ml-2 border-l border-border pl-3 space-y-0.5">
+                <button
                   onClick={() => openOverviewFor(d.id)}
-                  className={`flex items-center gap-2 px-2 py-1 rounded text-xs cursor-pointer border ${
+                  className={`group w-full h-7 flex items-center justify-between text-xs px-2 rounded-md transition-[background-color,color,box-shadow] duration-[180ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
                     isActiveDataset && workspaceTab === 'overview'
-                      ? 'border-accent/40 bg-accent-dim text-accent'
-                      : 'border-transparent text-text-secondary hover:border-border hover:bg-surface-hover/30'
+                      ? 'text-accent bg-accent-dim'
+                      : 'text-text-secondary hover:text-accent hover:bg-surface-elevated/70'
                   }`}
                 >
-                  {d.sourceType === 'database' ? <OverviewDatabaseIcon /> : <OverviewFileIcon />}
-                  <span className="truncate">Overview</span>
-                </div>
+                  <span className="inline-flex items-center gap-1.5">
+                    {d.sourceType === 'database' ? <OverviewDatabaseIcon /> : <OverviewFileIcon />}
+                    <span>Overview</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="text-[10px] font-mono text-text-muted">
+                      {d.rowCount.toLocaleString()}x{d.columns.length}
+                    </span>
+                    <span className={`transition-colors ${
+                      isActiveDataset && workspaceTab === 'overview'
+                        ? 'text-accent'
+                        : 'text-text-muted group-hover:text-accent'
+                    }`}>›</span>
+                  </span>
+                </button>
 
-                <div
-                  onClick={() => openDynamicFor(d.id, datasetCells.at(-1)?.id ?? null)}
-                  className={`flex items-center gap-2 px-2 py-1 rounded text-xs cursor-pointer border ${
-                    isActiveDataset && workspaceTab === 'dynamic'
-                      ? 'border-accent/40 bg-accent-dim text-accent'
-                      : 'border-transparent text-text-secondary hover:border-border hover:bg-surface-hover/30'
+                <button
+                  onClick={() => openNotebookFor(d.id, datasetCells.at(-1)?.id ?? null)}
+                  className={`group w-full h-7 flex items-center justify-between text-xs px-2 rounded-md transition-[background-color,color,box-shadow] duration-[180ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                    isActiveDataset && workspaceTab === 'notebook'
+                      ? 'text-accent bg-accent-dim'
+                      : 'text-text-secondary hover:text-accent hover:bg-surface-elevated/70'
                   }`}
                 >
-                  <DynamicIcon />
-                  <span className="truncate">Notebook</span>
-                  <span className="ml-auto text-[9px] font-mono text-text-muted">{datasetCells.length}</span>
-                </div>
+                  <span className="inline-flex items-center gap-1.5">
+                    <DynamicIcon />
+                    <span>Notebook</span>
+                  </span>
+                  <span className={`text-[10px] font-mono transition-colors ${
+                    isActiveDataset && workspaceTab === 'notebook'
+                      ? 'text-accent'
+                      : 'text-text-muted group-hover:text-accent'
+                  }`}>{datasetCells.length}</span>
+                </button>
 
-                <div className="ml-3 pl-2 border-l border-border/60 space-y-1">
-                  {datasetCells.length === 0 && (
-                    <div className="px-2 py-1 text-[11px] text-text-muted">No cells yet</div>
-                  )}
-
-                  {datasetCells.map((cell, idx) => (
-                    <div
-                      key={cell.id}
-                      onClick={() => openCell(cell.id, cell.datasetId)}
-                      className={`flex items-center gap-2 px-2 py-1 rounded text-xs cursor-pointer border ${
-                        activeCellId === cell.id && isActiveDataset && workspaceTab === 'dynamic'
-                          ? 'border-accent/40 bg-accent-dim'
-                          : 'border-transparent hover:border-border hover:bg-surface-hover/30'
-                      }`}
-                    >
-                      <span className="text-[9px] text-text-muted font-mono">{idx + 1}.</span>
-                      <span className="text-text-muted">
-                        {cell.type === 'compare'
-                          ? <CompareIcon />
-                          : cell.type === 'table'
-                            ? <TableIcon />
-                            : cell.type === 'lab'
-                              ? <LabIcon />
-                            : cell.type === 'python'
-                              ? <CodeIcon />
-                              : <CodeXmlIcon />}
-                      </span>
-                      <span className="text-text-secondary truncate">{cell.title}</span>
-                      {cell.result && !cell.isRunning && (
-                        <span className="text-[9px] text-success ml-auto font-mono">
-                          {cell.result.rowCount}x{cell.result.columns.length}
+                {datasetCells.length > 0 && (
+                  <div className="ml-2 mt-1 border-l border-border pl-3 space-y-0.5">
+                    {datasetCells.map((cell) => (
+                      <button
+                        key={cell.id}
+                        onClick={() => openCell(cell.id, cell.datasetId)}
+                        className={`group w-full h-6 flex items-center justify-between text-xs px-2 text-left rounded-md transition-[background-color,color,box-shadow] duration-[170ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                          activeCellId === cell.id && isActiveDataset && workspaceTab === 'notebook'
+                            ? 'text-accent bg-accent-dim'
+                            : 'text-text-secondary hover:text-accent hover:bg-surface-elevated/60'
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5 truncate">
+                          <span className="text-text-muted">
+                            {cell.type === 'compare' ? <CompareIcon /> : <TableIcon />}
+                          </span>
+                          <span className="truncate">{cell.title}</span>
                         </span>
-                      )}
-                      {cell.isRunning && <span className="text-[9px] text-accent ml-auto">run</span>}
-                      {cell.error && !cell.isRunning && <span className="text-[9px] text-error ml-auto">err</span>}
-                    </div>
-                  ))}
-                </div>
+                        <span className={`transition-colors ${
+                          activeCellId === cell.id && isActiveDataset && workspaceTab === 'notebook'
+                            ? 'text-accent'
+                            : 'text-text-muted group-hover:text-accent'
+                        }`}>›</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
+            </section>
           )
         })}
+
+        <section className="px-4 py-3 mt-2 border-t border-border/80">
+          <div className="text-[14px] uppercase tracking-[0.18em] font-mono text-text-secondary mb-1">Variables</div>
+          <div className="text-[11px] text-text-secondary">Available in phase 4.5</div>
+        </section>
       </div>
-    </div>
+    </aside>
   )
 }

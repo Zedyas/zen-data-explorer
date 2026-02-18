@@ -247,7 +247,7 @@ export function FilterToolbar() {
   }, [])
 
   return (
-    <div className="h-9 flex items-center gap-2 px-3 border-b border-border-strong panel-surface shrink-0">
+    <div className="h-9 flex items-center gap-2 px-3 border-b border-border panel-surface shrink-0">
       {/* Add filter button */}
       <div className="relative">
         <button

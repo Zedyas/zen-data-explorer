@@ -102,8 +102,6 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
       onSuccess: (data) => {
         updateCell(cell.id, {
           result: data,
-          sql: data.generatedSql,
-          python: data.generatedPython,
           isRunning: false,
           error: null,
         })
@@ -155,7 +153,7 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
     <div
       id={`cell-${cell.id}`}
       onClick={() => setActiveCell(cell.id)}
-      className={`rounded-lg overflow-hidden ${isActive ? 'gradient-border-active' : 'gradient-border-subtle'}`}
+      className={`overflow-hidden border bg-surface ${isActive ? 'border-accent border-l-2' : 'border-border'}`}
     >
       <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-border-strong bg-surface">
         <div className="flex items-center gap-2 min-w-0">
@@ -400,16 +398,16 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
       )}
 
       {result && (
-        <div className="border-t border-border">
-          <div className="px-2.5 py-1 text-[10px] text-text-muted border-b border-border/50 font-mono">
+        <div className="border-t border-border bg-bg">
+          <div className="px-3 py-1.5 text-[10px] text-text-muted border-b border-border font-mono bg-bg">
             {result.rowCount.toLocaleString()} rows x {result.columns.length} cols
           </div>
-          <div className="overflow-auto max-h-[360px]">
+          <div className="overflow-auto max-h-[360px] bg-bg">
             <table className="w-full border-collapse text-[11px]">
               <thead className="sticky top-0 z-[1]">
-                <tr className="bg-surface">
+                <tr className="bg-bg border-b border-border">
                   {result.columns.map((col) => (
-                    <th key={col} className="px-2 py-1 text-left font-medium text-text-secondary border-r border-border/30 last:border-r-0">
+                    <th key={col} className="px-3 py-2 text-left font-medium text-text-secondary">
                       {col}
                     </th>
                   ))}
@@ -417,10 +415,10 @@ export function TableCell({ cell }: { cell: InvestigationCell }) {
               </thead>
               <tbody>
                 {result.rows.map((row, i) => (
-                  <tr key={i} className="border-t border-border/50 bg-bg-deep/70 hover:bg-surface-hover/25">
+                  <tr key={i} className="h-[34px] border-b border-border hover:bg-surface-hover/40 transition-colors">
                     {result.columns.map((col) => (
-                      <td key={col} className="px-2 py-0.5 font-mono border-r border-border/20 last:border-r-0 bg-bg-deep/70">
-                        {row[col] == null ? <span className="text-text-muted/40 italic">null</span> : String(row[col])}
+                      <td key={col} className="px-3 py-0 font-mono text-xs text-text">
+                        {row[col] == null ? <span className="text-text-muted/40 italic">null</span> : <span className="truncate block">{String(row[col])}</span>}
                       </td>
                     ))}
                   </tr>

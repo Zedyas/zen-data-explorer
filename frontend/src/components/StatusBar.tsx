@@ -9,7 +9,7 @@ export function StatusBar() {
   const visibleCellCount = dataset ? cells.filter((c) => c.datasetId === dataset.id).length : 0
   const activeCell = cells.find((c) => c.id === activeCellId && c.datasetId === dataset?.id) ?? null
   const activeCellResult = activeCell?.result as { rowCount: number } | null
-  const workspaceLabel = workspaceTab === 'dynamic' ? 'notebook' : workspaceTab
+  const workspaceLabel = workspaceTab
 
   return (
     <div className="h-6 flex items-center justify-between px-3 border-t border-border panel-deep text-[10px] text-text-muted shrink-0">
@@ -34,7 +34,7 @@ export function StatusBar() {
         )}
       </div>
       <div className="font-mono">
-        {workspaceTab === 'dynamic' && activeCell && activeCellResult ? (
+        {workspaceTab === 'notebook' && activeCell && activeCellResult ? (
           <span className="text-accent">
             {activeCell.title}: {activeCellResult.rowCount.toLocaleString()} rows
           </span>

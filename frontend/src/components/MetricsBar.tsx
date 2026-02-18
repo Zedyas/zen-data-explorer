@@ -13,7 +13,7 @@ export function MetricsBar() {
     [cells, activeCellId, dataset?.id],
   )
   const activeCellResult = activeCell?.result as TableQueryResponse | null
-  const workspaceLabel = workspaceTab === 'dynamic' ? 'notebook' : workspaceTab
+  const workspaceLabel = workspaceTab
 
   if (!dataset) return null
 
@@ -25,12 +25,12 @@ export function MetricsBar() {
         <span className="font-mono">mode: {workspaceLabel}</span>
       </div>
       <div className="flex items-center gap-2">
-        {workspaceTab === 'dynamic' && activeCell && activeCellResult && (
+        {workspaceTab === 'notebook' && activeCell && activeCellResult && (
           <span className="px-1.5 py-0.5 rounded border border-accent/40 bg-accent-muted text-accent font-mono">
             active {activeCell.title}: {activeCellResult.rowCount.toLocaleString()} rows
           </span>
         )}
-        {workspaceTab === 'dynamic' && !activeCell && (
+        {workspaceTab === 'notebook' && !activeCell && (
           <span className="px-1.5 py-0.5 rounded border border-border bg-bg-deep text-text-muted font-mono">
             no active cell: showing overview context
           </span>

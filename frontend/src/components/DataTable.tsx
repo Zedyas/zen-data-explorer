@@ -13,7 +13,7 @@ import { ProfilePopover } from './ProfilePopover.tsx'
 import { ColumnMenu } from './ColumnMenu.tsx'
 import type { Column } from '../types.ts'
 
-const ROW_HEIGHT = 28
+const ROW_HEIGHT = 34
 
 export function DataTable() {
   const dataset = useAppStore((s) => s.activeDataset)
@@ -69,12 +69,12 @@ export function DataTable() {
 
     const rowNumCol: ColumnDef<Record<string, unknown>> = {
       id: '_rownum',
-      header: '#',
-      size: 56,
-      minSize: 56,
-      maxSize: 56,
+      header: () => <span className="text-[11px] font-mono text-text-muted">#</span>,
+      size: 64,
+      minSize: 64,
+      maxSize: 64,
       cell: ({ row }) => (
-        <span className="text-[10px] text-text-secondary/90 font-mono">
+        <span className="text-[10px] text-text-muted font-mono">
           {page * pageSize + row.index + 1}
         </span>
       ),
@@ -140,19 +140,19 @@ export function DataTable() {
   if (!dataset) return null
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Table container */}
       <div ref={parentRef} className="flex-1 overflow-auto">
         <table className="w-full border-collapse" style={{ minWidth: '100%' }}>
           {/* Header */}
           <thead className="sticky top-0 z-10">
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="panel-surface-elevated border-b border-border-strong">
+              <tr key={headerGroup.id} className="bg-bg border-b border-border">
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
                     data-col={header.column.id}
-                    className="relative px-3 py-2 text-left align-top table-col-sep last:border-r-0"
+                    className="relative px-3 py-2 text-left align-top"
                     style={{ width: header.getSize() }}
                     onContextMenu={(e) => {
                       const colId = header.column.id
@@ -194,13 +194,13 @@ export function DataTable() {
               return (
                 <tr
                   key={row.id}
-                  className="border-b border-border/70 hover:bg-surface-hover/60 transition-colors"
+                  className="border-b border-border hover:bg-surface-hover/40 transition-colors"
                   style={{ height: ROW_HEIGHT }}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
-                      className="px-3 py-0 table-col-sep last:border-r-0 overflow-hidden"
+                      className="px-3 py-0 overflow-hidden"
                       style={{ width: cell.column.getSize(), maxWidth: cell.column.getSize() }}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -241,41 +241,32 @@ export function DataTable() {
       </div>
 
       {/* Pagination bar */}
-      <div className="h-8 flex items-center justify-between px-3 border-t border-border-strong panel-surface-elevated shrink-0 text-xs">
-        <div className="text-text-muted">
-          <span>
-            Showing <span className="font-mono text-text-secondary">{rows.length.toLocaleString()}</span>
-            {' / '}
-            <span className="font-mono text-text-secondary">{filteredRows.toLocaleString()}</span> rows
-          </span>
-          {filteredRows !== totalRows && (
-            <span>
-              {' '}(<span className="font-mono text-text-secondary">{totalRows.toLocaleString()}</span> total)
-            </span>
-          )}
-          {isFetching && !isLoading && (
-            <span className="ml-2 text-accent">updating...</span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
+      <div className="h-9 flex items-center justify-between px-3 border-t border-border bg-surface shrink-0 text-xs">
+        <div className="flex items-center gap-2 font-mono text-text-secondary">
           <button
             disabled={page === 0}
             onClick={goPrevPage}
-            className="px-2 py-0.5 rounded border border-border-strong bg-surface hover:border-accent disabled:opacity-30 disabled:cursor-not-allowed text-text-secondary hover:text-text transition-colors"
+            className="h-6 px-2 border border-border bg-bg hover:border-accent disabled:opacity-30 disabled:cursor-not-allowed text-text-secondary hover:text-text transition-colors"
           >
-            ←
+            {'<'}
           </button>
-          <span className="font-mono text-text-secondary">
-            {page + 1} / {totalPages || 1}
+          <span>
+            {page + 1}
           </span>
           <button
             disabled={!pageData?.nextCursor}
             onClick={() => goNextPage(pageData?.nextCursor ?? null)}
-            className="px-2 py-0.5 rounded border border-border-strong bg-surface hover:border-accent disabled:opacity-30 disabled:cursor-not-allowed text-text-secondary hover:text-text transition-colors"
+            className="h-6 px-2 border border-border bg-bg hover:border-accent disabled:opacity-30 disabled:cursor-not-allowed text-text-secondary hover:text-text transition-colors"
           >
-            →
+            {'>'}
           </button>
+          <span className="text-text-muted">/ {totalPages || 1}</span>
+        </div>
+
+        <div className="text-text-muted font-mono">
+          <span>{rows.length.toLocaleString()} / {filteredRows.toLocaleString()} rows</span>
+          {filteredRows !== totalRows && <span> ({totalRows.toLocaleString()} total)</span>}
+          {isFetching && !isLoading && <span className="ml-2 text-accent">updating...</span>}
         </div>
       </div>
 

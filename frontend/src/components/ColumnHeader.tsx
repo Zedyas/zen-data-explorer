@@ -1,7 +1,15 @@
 import { useAppStore } from '../store.ts'
 import type { Column } from '../types.ts'
 
-const TYPE_LABELS: Record<string, string> = {
+const TYPE_PREFIX: Record<string, string> = {
+  string: 'A',
+  integer: '#',
+  float: '#',
+  date: 'D',
+  boolean: 'B',
+}
+
+const TYPE_BADGE_LABELS: Record<string, string> = {
   string: 'str',
   integer: 'int',
   float: 'flt',
@@ -58,9 +66,9 @@ export function ColumnHeader({ column, sparkline, onProfileClick }: ColumnHeader
         onClick={() => setSort(column.name)}
         className="w-full text-left cursor-pointer"
       >
-        {/* Row 1: Name + sort indicator */}
-        <div className="flex items-center gap-1">
-          <span className="text-xs font-medium text-text truncate">{column.name}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[9px] font-mono text-text-muted">{TYPE_PREFIX[column.type] ?? '?'}</span>
+          <span className="text-[10px] font-semibold tracking-[0.08em] text-text-secondary uppercase truncate">{column.name}</span>
           {isSorted && (
             <span className="text-accent text-[10px]">
               {sort.direction === 'asc' ? '↑' : '↓'}
@@ -73,11 +81,13 @@ export function ColumnHeader({ column, sparkline, onProfileClick }: ColumnHeader
           )}
         </div>
 
-        {/* Row 2: Type badge + null/unique stats */}
-        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-          <span className={`type-badge-${column.type} px-1 py-px rounded text-[9px] font-mono leading-none`}>
-            {TYPE_LABELS[column.type] ?? column.type}
+        <div className="mt-0.5">
+          <span className={`type-badge-${column.type} inline-flex items-center px-1.5 py-px rounded-sm border text-[9px] font-mono leading-none`}>
+            {TYPE_BADGE_LABELS[column.type] ?? column.type}
           </span>
+        </div>
+
+        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
           <span className={`text-[9px] font-mono ${nullToneClass}`}>
             {nullPct.toFixed(1)}% null
           </span>

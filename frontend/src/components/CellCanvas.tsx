@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject, type UIEvent } from 'react'
 import { useRunTableQuery } from '../api.ts'
 import { useAppStore } from '../store.ts'
-import { LabCell } from './LabCell.tsx'
-import { SqlCell } from './SqlCell.tsx'
 import { TableCell } from './TableCell.tsx'
 import type { AggregationSpec, ColumnType, Filter, HavingSpec, InvestigationCell, TableQueryResponse, TableQuerySpec } from '../types.ts'
 import {
@@ -43,33 +41,6 @@ function compareMetricDelta(left: number, right: number): string {
   const pct = right === 0 ? null : (diff / right) * 100
   if (pct == null || !Number.isFinite(pct)) return `${diff.toLocaleString()}`
   return `${diff.toLocaleString()} (${pct.toFixed(1)}%)`
-}
-
-
-function PythonCell({ cell }: { cell: InvestigationCell }) {
-  const updateCell = useAppStore((s) => s.updateCell)
-  const removeCell = useAppStore((s) => s.removeCell)
-  const setActiveCell = useAppStore((s) => s.setActiveCell)
-  const activeCellId = useAppStore((s) => s.activeCellId)
-  const isActive = activeCellId === cell.id
-
-  return (
-    <div
-      id={`cell-${cell.id}`}
-      onClick={() => setActiveCell(cell.id)}
-      className={`rounded-lg overflow-hidden ${isActive ? 'gradient-border-active' : 'gradient-border-subtle'}`}
-    >
-      <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-border-strong bg-surface">
-        <span className="text-xs text-text-secondary">{cell.title} (display only)</span>
-        <button onClick={() => removeCell(cell.id)} className="text-text-muted hover:text-error text-sm px-1">&times;</button>
-      </div>
-      <textarea
-        value={cell.python ?? ''}
-        onChange={(e) => updateCell(cell.id, { python: e.target.value })}
-        className="w-full min-h-[120px] bg-bg-deep text-text-secondary font-mono text-xs p-2.5 outline-none resize-y border-t border-border/50"
-      />
-    </div>
-  )
 }
 
 function CompareCell({ cell }: { cell: InvestigationCell }) {
@@ -173,7 +144,7 @@ function CompareCell({ cell }: { cell: InvestigationCell }) {
 
   if (!compare) {
     return (
-      <div id={`cell-${cell.id}`} className="rounded-lg overflow-hidden gradient-border-subtle">
+      <div id={`cell-${cell.id}`} className="overflow-hidden border border-border bg-surface">
         <div className="px-3 py-2 text-xs text-text-muted">Preparing compare cell...</div>
       </div>
     )
@@ -285,7 +256,7 @@ function CompareCell({ cell }: { cell: InvestigationCell }) {
     <div
       id={`cell-${cell.id}`}
       onClick={() => setActiveCell(cell.id)}
-      className={`rounded-lg overflow-hidden ${isActive ? 'gradient-border-active' : 'gradient-border-subtle'}`}
+      className={`overflow-hidden border bg-surface ${isActive ? 'border-accent border-l-2' : 'border-border'}`}
     >
       <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-border-strong bg-surface">
         <span className="text-xs text-text-secondary">{cell.title}</span>
@@ -630,12 +601,16 @@ function CompareSideConfig({
       </div>
 
       {result && (
-        <div ref={paneRef} onScroll={onPaneScroll} className="overflow-auto max-h-[280px]">
+        <div
+          ref={paneRef}
+          onScroll={onPaneScroll}
+          className="overflow-auto max-h-[280px] bg-bg"
+        >
           <table className="w-full border-collapse text-[11px]">
             <thead className="sticky top-0 z-[1]">
-              <tr className="bg-surface">
+              <tr className="bg-bg border-b border-border">
                 {result.columns.map((col) => (
-                  <th key={col} className="px-2 py-1 text-left font-medium text-text-secondary border-r border-border/30 last:border-r-0">
+                  <th key={col} className="px-3 py-2 text-left font-medium text-text-secondary">
                     {col}
                   </th>
                 ))}
@@ -643,10 +618,10 @@ function CompareSideConfig({
             </thead>
             <tbody>
               {result.rows.map((row, i) => (
-                <tr key={i} className="border-t border-border/40 bg-bg-deep/70 hover:bg-surface-hover/25">
+                <tr key={i} className="h-[34px] border-b border-border hover:bg-surface-hover/40 transition-colors">
                   {result.columns.map((col) => (
-                    <td key={col} className="px-2 py-0.5 font-mono border-r border-border/20 last:border-r-0 bg-bg-deep/70">
-                      {row[col] == null ? <span className="text-text-muted/40 italic">null</span> : String(row[col])}
+                    <td key={col} className="px-3 py-0 font-mono text-xs text-text">
+                      {row[col] == null ? <span className="text-text-muted/40 italic">null</span> : <span className="truncate block">{String(row[col])}</span>}
                     </td>
                   ))}
                 </tr>
@@ -663,119 +638,37 @@ function CompareSideConfig({
   )
 }
 
-function TransformationsPlaceholder() {
-  return (
-    <div className="gradient-border-subtle rounded-lg overflow-hidden">
-      <div className="px-3 py-2 border-b border-border-strong bg-surface flex items-center justify-between">
-        <span className="text-xs text-text-secondary">Transformations (Scaffold)</span>
-        <span className="text-[10px] text-text-muted font-mono">coming later</span>
-      </div>
-      <div className="p-3 bg-bg-deep/70 space-y-3">
-        <div className="px-2 py-1 rounded border border-border bg-bg-deep/60 text-[11px] text-text-muted">
-          Source is read-only by default. Transformations will produce derived results.
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_240px] gap-3">
-          <div className="rounded border border-border bg-bg-deep/60 p-2 space-y-1">
-            <div className="text-[10px] font-mono text-text-muted uppercase tracking-wide">Step Types</div>
-            <div className="text-[11px] text-text-secondary">Type fixes</div>
-            <div className="text-[11px] text-text-secondary">Missing data</div>
-            <div className="text-[11px] text-text-secondary">Text mapping</div>
-            <div className="text-[11px] text-text-secondary">Join/enrich</div>
-            <div className="text-[11px] text-text-secondary">Reshape</div>
-            <div className="text-[11px] text-text-secondary">Derived columns</div>
-          </div>
-
-          <div className="rounded border border-border bg-bg-deep/60 p-2 space-y-2">
-            <div className="text-[10px] font-mono text-text-muted uppercase tracking-wide">Pipeline Preview</div>
-            <div className="px-2 py-1 rounded border border-border/80 bg-bg-deep/70 text-[11px] text-text-muted">1) Cast `order_date` to date</div>
-            <div className="px-2 py-1 rounded border border-border/80 bg-bg-deep/70 text-[11px] text-text-muted">2) Fill nulls in `region` with "Unknown"</div>
-            <div className="px-2 py-1 rounded border border-border/80 bg-bg-deep/70 text-[11px] text-text-muted">3) Add derived `margin_pct`</div>
-          </div>
-
-          <div className="rounded border border-border bg-bg-deep/60 p-2 space-y-1">
-            <div className="text-[10px] font-mono text-text-muted uppercase tracking-wide">Impact Preview</div>
-            <div className="text-[11px] text-text-secondary">Rows: unchanged</div>
-            <div className="text-[11px] text-text-secondary">Columns: +1 derived</div>
-            <div className="text-[11px] text-text-secondary">Nulls: -3.2% in `region`</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export function CellCanvas() {
   const cells = useAppStore((s) => s.cells)
   const addCell = useAppStore((s) => s.addCell)
   const activeDataset = useAppStore((s) => s.activeDataset)
-  const notebookView = useAppStore((s) => s.notebookView)
-  const setNotebookView = useAppStore((s) => s.setNotebookView)
   const visibleCells = activeDataset ? cells.filter((c) => c.datasetId === activeDataset.id) : []
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="inline-flex items-center rounded border border-border-strong bg-surface p-0.5 text-xs">
-          <button
-            onClick={() => setNotebookView('insights')}
-            className={`px-2 py-1 rounded transition-colors ${
-              notebookView === 'insights' ? 'bg-bg-deep/70 text-text' : 'text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            Insights
+        <span className="text-[14px] font-mono uppercase tracking-[0.18em] text-text-secondary">Notebook</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button disabled={!activeDataset} onClick={() => addCell('table')} className="h-7 px-2 rounded border border-border-strong bg-surface text-xs text-text-secondary hover:text-text hover:border-accent disabled:opacity-40 transition-colors">
+            + Table Cell
           </button>
-          <button
-            onClick={() => setNotebookView('transformations')}
-            className={`px-2 py-1 rounded transition-colors ${
-              notebookView === 'transformations' ? 'bg-bg-deep/70 text-text' : 'text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            Transformations
+          <button onClick={() => addCell('compare')} className="h-7 px-2 rounded border border-border-strong bg-surface text-xs text-text-secondary hover:text-text hover:border-accent transition-colors">
+            + Compare Cell
           </button>
+          {!activeDataset && <span className="text-[10px] text-text-muted">Load/select a dataset to add cells.</span>}
         </div>
-
-        {notebookView === 'insights' && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <button disabled={!activeDataset} onClick={() => addCell('table')} className="px-2 py-1 rounded border border-border-strong bg-surface text-xs text-text-secondary hover:text-text hover:border-accent disabled:opacity-40 transition-colors">
-              + Table Cell
-            </button>
-            <button onClick={() => addCell('compare')} className="px-2 py-1 rounded border border-border-strong bg-surface text-xs text-text-secondary hover:text-text hover:border-accent transition-colors">
-              + Compare Cell
-            </button>
-            <button disabled={!activeDataset} onClick={() => addCell('python')} className="px-2 py-1 rounded border border-border-strong bg-surface text-xs text-text-secondary hover:text-text hover:border-accent disabled:opacity-40 transition-colors">
-              + Python Cell
-            </button>
-            <button disabled={!activeDataset} onClick={() => addCell('sql')} className="px-2 py-1 rounded border border-border-strong bg-surface text-xs text-text-secondary hover:text-text hover:border-accent disabled:opacity-40 transition-colors">
-              + SQL Cell
-            </button>
-            <button disabled={!activeDataset} onClick={() => addCell('lab')} className="px-2 py-1 rounded border border-border-strong bg-surface text-xs text-text-secondary hover:text-text hover:border-accent disabled:opacity-40 transition-colors">
-              + Lab Cell
-            </button>
-            {!activeDataset && <span className="text-[10px] text-text-muted">Load/select a dataset to add query cells.</span>}
-          </div>
-        )}
       </div>
 
-      {notebookView === 'transformations' ? (
-        <TransformationsPlaceholder />
-      ) : (
-        <>
-          {visibleCells.length === 0 && (
-            <div className="gradient-border-subtle rounded-lg p-6 text-center text-text-muted text-sm">
-              Notebook is empty. Add your first cell to start from the current Overview snapshot.
-            </div>
-          )}
-
-          {visibleCells.map((cell) => {
-            if (cell.type === 'table') return <TableCell key={cell.id} cell={cell} />
-            if (cell.type === 'sql') return <SqlCell key={cell.id} cell={cell} />
-            if (cell.type === 'compare') return <CompareCell key={cell.id} cell={cell} />
-            if (cell.type === 'lab') return <LabCell key={cell.id} cell={cell} />
-            return <PythonCell key={cell.id} cell={cell} />
-          })}
-        </>
+      {visibleCells.length === 0 && (
+        <div className="border border-dashed border-border-strong rounded-md p-6 text-center text-text-secondary text-sm bg-transparent">
+          Notebook is empty. Add your first cell to start from the current Overview snapshot.
+        </div>
       )}
+
+      {visibleCells.map((cell) => {
+        if (cell.type === 'table') return <TableCell key={cell.id} cell={cell} />
+        return <CompareCell key={cell.id} cell={cell} />
+      })}
     </div>
   )
 }
