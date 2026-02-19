@@ -270,12 +270,19 @@ export const useAppStore = create<AppState>((set) => ({
         title:
           type === 'table'
             ? `Table ${s.cells.length + 1}`
-            : `Compare ${s.cells.length + 1}`,
+            : type === 'code'
+              ? `Code ${s.cells.length + 1}`
+              : `Compare ${s.cells.length + 1}`,
         datasetId: activeDataset?.id,
         tableSpec: type === 'table' ? (firstTableCell ? baseSpec : defaultTableSpec()) : undefined,
+        codeLanguage: type === 'code' ? 'sql' : undefined,
+        code: type === 'code' ? 'SELECT * FROM data LIMIT 50' : undefined,
+        codeSql: type === 'code' ? 'SELECT * FROM data LIMIT 50' : undefined,
+        codePython: type === 'code' ? 'df.head(50)' : undefined,
         compare: type === 'compare' ? buildCompareState(activeDataset?.id, s.datasets) : undefined,
         autoRun: type === 'table' ? firstTableCell : false,
         result: null,
+        textOutput: null,
         error: null,
         isRunning: false,
       }

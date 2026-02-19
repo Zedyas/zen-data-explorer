@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject, type UIEvent } from 'react'
 import { useRunTableQuery } from '../api.ts'
 import { useAppStore } from '../store.ts'
+import { CodeCell } from './CodeCell.tsx'
 import { TableCell } from './TableCell.tsx'
 import type { AggregationSpec, ColumnType, Filter, HavingSpec, InvestigationCell, TableQueryResponse, TableQuerySpec } from '../types.ts'
 import {
@@ -652,6 +653,9 @@ export function CellCanvas() {
           <button disabled={!activeDataset} onClick={() => addCell('table')} className="h-7 px-2 rounded border border-border-strong bg-surface text-xs text-text-secondary hover:text-text hover:border-accent disabled:opacity-40 transition-colors">
             + Table Cell
           </button>
+          <button disabled={!activeDataset} onClick={() => addCell('code')} className="h-7 px-2 rounded border border-border-strong bg-surface text-xs text-text-secondary hover:text-text hover:border-accent disabled:opacity-40 transition-colors">
+            + Code Cell
+          </button>
           <button onClick={() => addCell('compare')} className="h-7 px-2 rounded border border-border-strong bg-surface text-xs text-text-secondary hover:text-text hover:border-accent transition-colors">
             + Compare Cell
           </button>
@@ -667,6 +671,7 @@ export function CellCanvas() {
 
       {visibleCells.map((cell) => {
         if (cell.type === 'table') return <TableCell key={cell.id} cell={cell} />
+        if (cell.type === 'code') return <CodeCell key={cell.id} cell={cell} />
         return <CompareCell key={cell.id} cell={cell} />
       })}
     </div>

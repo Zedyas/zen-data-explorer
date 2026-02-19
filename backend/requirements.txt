@@ -1,4 +1,6 @@
 fastapi
+pydantic
 uvicorn[standard]
 duckdb
 python-multipart
+pandas

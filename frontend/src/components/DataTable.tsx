@@ -136,6 +136,7 @@ export function DataTable() {
   const totalPages = pageData?.totalPages ?? 0
   const filteredRows = pageData?.filteredRows ?? dataset?.rowCount ?? 0
   const totalRows = pageData?.totalRows ?? dataset?.rowCount ?? 0
+  const shownRows = filteredRows > 0 ? Math.min(page * pageSize + rows.length, filteredRows) : 0
 
   if (!dataset) return null
 
@@ -264,7 +265,7 @@ export function DataTable() {
         </div>
 
         <div className="text-text-muted font-mono">
-          <span>{rows.length.toLocaleString()} / {filteredRows.toLocaleString()} rows</span>
+          <span>{shownRows.toLocaleString()} / {filteredRows.toLocaleString()} rows</span>
           {filteredRows !== totalRows && <span> ({totalRows.toLocaleString()} total)</span>}
           {isFetching && !isLoading && <span className="ml-2 text-accent">updating...</span>}
         </div>

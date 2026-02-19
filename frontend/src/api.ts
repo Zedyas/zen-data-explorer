@@ -167,6 +167,17 @@ export function useRunQuery(datasetId: string | undefined) {
   })
 }
 
+export function useRunCode(datasetId: string | undefined) {
+  return useMutation({
+    mutationFn: (payload: { language: 'sql' | 'python'; code: string }) =>
+      request<QueryResponse>(`/datasets/${datasetId}/code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }),
+  })
+}
+
 // ── Table Query Cell ──
 
 export function useRunTableQuery(datasetId: string | undefined) {

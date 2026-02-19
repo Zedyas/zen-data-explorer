@@ -11,6 +11,7 @@ This document tracks endpoint naming and intent across current + upcoming phases
 - `GET /api/datasets/{dataset_id}/page`
 - `GET /api/datasets/{dataset_id}/profile/{column}`
 - `POST /api/datasets/{dataset_id}/query`
+- `POST /api/datasets/{dataset_id}/code`
 - `POST /api/datasets/{dataset_id}/table-query`
 - `GET /api/datasets/{dataset_id}/export`
 

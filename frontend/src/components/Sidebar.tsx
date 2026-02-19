@@ -1,5 +1,6 @@
 import { useAppStore } from '../store.ts'
 import {
+  CodeIcon,
   CompareIcon,
   DynamicIcon,
   OverviewDatabaseIcon,
@@ -135,7 +136,7 @@ export function Sidebar() {
                       >
                         <span className="inline-flex items-center gap-1.5 truncate">
                           <span className="text-text-muted">
-                            {cell.type === 'compare' ? <CompareIcon /> : <TableIcon />}
+                            {cell.type === 'compare' ? <CompareIcon /> : cell.type === 'code' ? <CodeIcon /> : <TableIcon />}
                           </span>
                           <span className="truncate">{cell.title}</span>
                         </span>

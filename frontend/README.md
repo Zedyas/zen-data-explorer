@@ -30,8 +30,9 @@ npm run build
 
 Artifacts are generated in `frontend/dist/` and are served by FastAPI in production.
 
-## Current Phase 1 Features
-- CSV upload landing flow (via backend API)
+## Current Features (through Phase 3)
+- Multi-format upload and import flow (`.csv`, `.parquet`, `.xlsx`, `.sqlite`, `.db`)
+- Discover/import selection dialogs for Excel sheets and SQLite tables
 - Dataset workspace with table, filter toolbar, sidebar, top/status bars
 - Server-side sorting and filtering
 - Keyset cursor pagination
@@ -39,3 +40,11 @@ Artifacts are generated in `frontend/dist/` and are served by FastAPI in product
 - Column visibility toggles
 - Column resize handles
 - Column header metadata (type badge, null %, sparkline)
+- Expanded column profile metrics (sentinels, outlier lengths, numeric sum/IQR/tail rates)
+- Unified Code Cell (`SQL`/`Python`) in Notebook
+- Backend code endpoint: `POST /api/datasets/{dataset_id}/code`
+
+## API Flow (Phase 2)
+- `POST /api/datasets/discover` to inspect uploaded file entities
+- `POST /api/datasets/import` to import selected entities as datasets
+- `POST /api/datasets/upload` remains for direct single-entity imports (`csv`, `parquet`)

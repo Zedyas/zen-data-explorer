@@ -6,6 +6,7 @@ import sqlite3
 import sys
 
 import duckdb
+from openpyxl import Workbook
 
 
 from fastapi.testclient import TestClient
@@ -123,6 +124,58 @@ def test_discover_and_import_parquet(tmp_path: Path) -> None:
     assert len(import_payload["datasets"]) == 1
     assert import_payload["datasets"][0]["name"] == "batch.parquet"
     assert import_payload["datasets"][0]["rowCount"] == 2
+
+
+def test_discover_and_import_excel_selected_sheet(tmp_path: Path) -> None:
+    xlsx_path = tmp_path / "book.xlsx"
+
+    wb = Workbook()
+    ws_claims = wb.active
+    assert ws_claims is not None
+    ws_claims.title = "claims"
+    ws_claims.append(["claim_id", "member_id", "paid_amt"])
+    ws_claims.append(["CLM1", "MEM1", 120.5])
+    ws_claims.append(["CLM2", "MEM2", 88.0])
+
+    ws_members = wb.create_sheet("members")
+    ws_members.append(["member_id", "plan_type"])
+    ws_members.append(["MEM1", "PPO"])
+    ws_members.append(["MEM2", "HMO"])
+    ws_members.append(["MEM3", "EPO"])
+    wb.save(xlsx_path)
+
+    discover_resp = client.post(
+        "/api/datasets/discover",
+        files={
+            "file": (
+                "book.xlsx",
+                xlsx_path.read_bytes(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert discover_resp.status_code == 200
+    discover_payload = discover_resp.json()
+    assert discover_payload["format"] == "excel"
+    assert discover_payload["requiresSelection"] is True
+    names = {e["name"] for e in discover_payload["entities"]}
+    assert {"claims", "members"}.issubset(names)
+
+    import_resp = client.post(
+        "/api/datasets/import",
+        json={
+            "importId": discover_payload["importId"],
+            "importMode": "selected",
+            "selectedEntities": ["members"],
+            "datasetNameMode": "filename_entity",
+        },
+    )
+    assert import_resp.status_code == 200
+    import_payload = import_resp.json()
+    assert len(import_payload["datasets"]) == 1
+    dataset = import_payload["datasets"][0]
+    assert dataset["name"] == "book_members"
+    assert dataset["rowCount"] == 3
 
 
 def test_discover_and_import_sqlite_selected_table(tmp_path: Path) -> None:
@@ -352,6 +405,63 @@ def test_query_non_select_statement_returns_success() -> None:
     assert isinstance(payload["columns"], list)
     assert isinstance(payload["rows"], list)
     assert payload["rowCount"] == len(payload["rows"])
+
+
+def test_code_sql_executes_query() -> None:
+    dataset_id = _dataset_id()
+    resp = client.post(
+        f"/api/datasets/{dataset_id}/code",
+        json={
+            "language": "sql",
+            "code": "SELECT region, COUNT(*) AS cnt FROM data GROUP BY region ORDER BY cnt DESC",
+        },
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["columns"] == ["region", "cnt"]
+    assert payload["rowCount"] == len(payload["rows"])
+
+
+def test_code_python_returns_dataframe_result() -> None:
+    dataset_id = _dataset_id()
+    resp = client.post(
+        f"/api/datasets/{dataset_id}/code",
+        json={
+            "language": "python",
+            "code": "df[df['amount'] > 1000][['id', 'amount']].head(5)",
+        },
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["columns"] == ["id", "amount"]
+    assert payload["rowCount"] >= len(payload["rows"])
+
+
+def test_code_python_returns_text_output() -> None:
+    dataset_id = _dataset_id()
+    resp = client.post(
+        f"/api/datasets/{dataset_id}/code",
+        json={
+            "language": "python",
+            "code": "print(df.shape)\nlen(df)",
+        },
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["columns"] == []
+    assert payload["rowCount"] == 0
+    assert "textOutput" in payload
+    assert "(" in payload["textOutput"]
+
+
+def test_code_python_error_returns_400() -> None:
+    dataset_id = _dataset_id()
+    resp = client.post(
+        f"/api/datasets/{dataset_id}/code",
+        json={"language": "python", "code": "df[['missing_col']].head()"},
+    )
+    assert resp.status_code == 400
+    assert "Code execution failed" in resp.text
 
 
 def test_table_query_returns_rows_and_generated_code() -> None:

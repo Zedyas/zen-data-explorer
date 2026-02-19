@@ -20,6 +20,7 @@ No cloud service. No multi-user complexity. Runs on your machine.
 - Notebook cells:
   - Table cells (filter, group, aggregate, having, sort, limit)
   - Compare cells (left/right dataset builders with independent modifiers)
+  - Code cells (SQL + Python execution)
 - CSV export of filtered/sorted results
 
 ## Tech Stack
@@ -82,6 +83,12 @@ This includes formulas and definitions for:
 - string metrics (sentinels, blank/whitespace, pattern classes, length outliers)
 - date metrics (missing periods, largest gap)
 - boolean split metrics
+
+## API Docs
+
+- Endpoint naming and phase rollout: `docs/API_ENDPOINT_PLAN.md`
+- Profiling metric glossary/source-of-truth: `docs/PROFILING_METRICS.md`
+- Ongoing product idea log: `docs/FUTURE_IDEAS.md`
 
 ## Notes
 

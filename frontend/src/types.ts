@@ -110,11 +110,12 @@ export interface QueryResponse {
   rows: Record<string, unknown>[]
   rowCount: number
   executionTime: number
+  textOutput?: string
 }
 
 export type WorkspaceTab = 'overview' | 'notebook'
 
-export type CellType = 'table' | 'compare'
+export type CellType = 'table' | 'compare' | 'code'
 
 export interface AggregationSpec {
   op: 'count' | 'sum' | 'avg' | 'min' | 'max'
@@ -156,6 +157,10 @@ export interface InvestigationCell {
   title: string
   datasetId?: string
   tableSpec?: TableQuerySpec
+  codeLanguage?: 'sql' | 'python'
+  code?: string
+  codeSql?: string
+  codePython?: string
   compare?: {
     leftDatasetId: string | null
     rightDatasetId: string | null
@@ -170,6 +175,7 @@ export interface InvestigationCell {
   }
   autoRun?: boolean
   result: QueryResponse | TableQueryResponse | null
+  textOutput?: string | null
   error: string | null
   isRunning: boolean
 }

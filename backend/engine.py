@@ -18,6 +18,7 @@ from typing import Any
 import xml.etree.ElementTree as ET
 
 import duckdb
+from code_runner import execute_python_code
 
 
 class Engine(ABC):
@@ -59,6 +60,10 @@ class Engine(ABC):
     @abstractmethod
     def run_query(self, dataset_id: str, sql: str) -> dict:
         """Execute arbitrary SQL against a dataset. Returns columns + rows."""
+
+    @abstractmethod
+    def run_code(self, dataset_id: str, language: str, code: str) -> dict:
+        """Execute SQL or Python code against a dataset."""
 
     @abstractmethod
     def run_table_query(self, dataset_id: str, spec: dict[str, Any]) -> dict:
@@ -1226,6 +1231,19 @@ class DuckDBEngine(Engine):
             "rowCount": len(rows),
             "executionTime": elapsed,
         }
+
+    def run_code(self, dataset_id: str, language: str, code: str) -> dict:
+        lang = language.lower().strip()
+        if lang == "sql":
+            return self.run_query(dataset_id, code)
+        if lang != "python":
+            raise ValueError(f"Unsupported code language: {language}")
+
+        table = self._get_table(dataset_id)
+        table_sql = self._quote_ident(table)
+        with self._query_lock:
+            df = self.conn.execute(f"SELECT * FROM {table_sql}").df()
+        return execute_python_code(code, df)
 
     def run_table_query(self, dataset_id: str, spec: dict[str, Any]) -> dict:
         table = self._get_table(dataset_id)

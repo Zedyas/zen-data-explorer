@@ -281,6 +281,11 @@ class QueryRequest(BaseModel):
     sql: str
 
 
+class CodeRequest(BaseModel):
+    language: Literal["sql", "python"]
+    code: str
+
+
 class TableQueryRequest(BaseModel):
     filters: list[dict] = Field(default_factory=list)
     groupBy: list[str] = Field(default_factory=list)
@@ -302,6 +307,22 @@ async def run_query(dataset_id: str, body: QueryRequest):
         raise HTTPException(400, str(e))
     except duckdb.Error as e:
         raise HTTPException(400, f"Query failed: {e}")
+
+
+@app.post("/api/datasets/{dataset_id}/code")
+async def run_code(dataset_id: str, body: CodeRequest):
+    if not body.code.strip():
+        raise HTTPException(400, "Code is empty")
+    try:
+        return engine.run_code(dataset_id, body.language, body.code)
+    except ValueError as e:
+        if "not found" in str(e).lower():
+            raise HTTPException(404, str(e))
+        raise HTTPException(400, str(e))
+    except duckdb.Error as e:
+        raise HTTPException(400, f"Code execution failed: {e}")
+    except Exception as e:
+        raise HTTPException(400, f"Code execution failed: {e}")
 
 
 @app.post("/api/datasets/{dataset_id}/table-query")
