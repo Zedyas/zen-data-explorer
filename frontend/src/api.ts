@@ -1,6 +1,9 @@
 import { useQuery, useMutation } from '@tanstack/react-query'
 import type {
+  DiscoverResponse,
   Filter,
+  ImportRequest,
+  ImportResponse,
   PageResponse,
   UploadResponse,
   SchemaResponse,
@@ -24,6 +27,27 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 // ── Upload ──
 
+function applyImportedDatasets(
+  setActiveDataset: (dataset: {
+    id: string
+    name: string
+    sourceType?: 'file' | 'database'
+    rowCount: number
+    columns: UploadResponse['columns']
+  } | null) => void,
+  datasets: UploadResponse[],
+) {
+  for (const ds of datasets) {
+    setActiveDataset({
+      id: ds.id,
+      name: ds.name,
+      sourceType: ds.sourceType ?? 'file',
+      rowCount: ds.rowCount,
+      columns: ds.columns,
+    })
+  }
+}
+
 export function useUploadDataset() {
   const setActiveDataset = useAppStore((s) => s.setActiveDataset)
 
@@ -41,6 +65,32 @@ export function useUploadDataset() {
         rowCount: data.rowCount,
         columns: data.columns,
       })
+    },
+  })
+}
+
+export function useDiscoverDataset() {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData()
+      form.append('file', file)
+      return request<DiscoverResponse>('/datasets/discover', { method: 'POST', body: form })
+    },
+  })
+}
+
+export function useImportDatasets() {
+  const setActiveDataset = useAppStore((s) => s.setActiveDataset)
+
+  return useMutation({
+    mutationFn: (body: ImportRequest) =>
+      request<ImportResponse>('/datasets/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (data) => {
+      applyImportedDatasets(setActiveDataset, data.datasets)
     },
   })
 }

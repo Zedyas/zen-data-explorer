@@ -48,6 +48,32 @@ export interface UploadResponse {
   columns: Column[]
 }
 
+export interface DiscoverEntity {
+  name: string
+  kind: 'dataset' | 'sheet' | 'table'
+  rowCount: number
+}
+
+export interface DiscoverResponse {
+  importId: string
+  name: string
+  format: 'csv' | 'parquet' | 'excel' | 'sqlite'
+  entities: DiscoverEntity[]
+  requiresSelection: boolean
+}
+
+export interface ImportRequest {
+  importId: string
+  selectedEntities?: string[]
+  importMode?: 'selected' | 'all'
+  datasetNameMode?: 'filename_entity' | 'entity_only'
+}
+
+export interface ImportResponse {
+  importId: string
+  datasets: UploadResponse[]
+}
+
 // Phase 2 types
 
 export interface ProfileResponse {

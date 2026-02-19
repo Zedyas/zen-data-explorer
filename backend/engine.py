@@ -7,19 +7,28 @@ import csv
 import io
 import json
 import math
+import sqlite3
 import threading
 import time
 import uuid
+import zipfile
 from abc import ABC, abstractmethod
 from datetime import date, datetime
 from typing import Any
+import xml.etree.ElementTree as ET
 
 import duckdb
 
 
 class Engine(ABC):
     @abstractmethod
-    def load_file(self, path: str, name: str) -> str:
+    def load_file(
+        self,
+        path: str,
+        name: str,
+        file_format: str = "csv",
+        entity: str | None = None,
+    ) -> str:
         """Load a file into the engine. Returns dataset_id."""
 
     @abstractmethod
@@ -126,17 +135,136 @@ class DuckDBEngine(Engine):
         self.datasets: dict[str, str] = {}  # id -> table_name
         self._query_lock = threading.Lock()
 
-    def load_file(self, path: str, name: str) -> str:
+    def load_file(
+        self,
+        path: str,
+        name: str,
+        file_format: str = "csv",
+        entity: str | None = None,
+    ) -> str:
         dataset_id = uuid.uuid4().hex[:12]
         table_name = f"ds_{dataset_id}"
         table_sql = self._quote_ident(table_name)
 
-        self.conn.execute(
-            f"CREATE TABLE {table_sql} AS SELECT * FROM read_csv_auto(?, header=true, all_varchar=false)",
-            [path],
-        )
+        if file_format == "csv":
+            self.conn.execute(
+                f"CREATE TABLE {table_sql} AS SELECT * FROM read_csv_auto(?, header=true, all_varchar=false)",
+                [path],
+            )
+        elif file_format == "parquet":
+            self.conn.execute(
+                f"CREATE TABLE {table_sql} AS SELECT * FROM read_parquet(?)",
+                [path],
+            )
+        elif file_format == "excel":
+            if not entity:
+                raise ValueError("Excel import requires a sheet name")
+            self.conn.execute(
+                f"CREATE TABLE {table_sql} AS SELECT * FROM read_xlsx(?, sheet = ?)",
+                [path, entity],
+            )
+        elif file_format == "sqlite":
+            if not entity:
+                raise ValueError("SQLite import requires a table name")
+            self._ensure_sqlite_extension()
+            self.conn.execute(
+                f"CREATE TABLE {table_sql} AS SELECT * FROM sqlite_scan(?, ?)",
+                [path, entity],
+            )
+        else:
+            raise ValueError(f"Unsupported file format: {file_format}")
+
         self.datasets[dataset_id] = table_name
         return dataset_id
+
+    def discover_file_entities(
+        self, path: str, file_format: str
+    ) -> list[dict[str, Any]]:
+        if file_format == "csv":
+            row = self.conn.execute(
+                "SELECT COUNT(*) FROM read_csv_auto(?, header=true, all_varchar=false)",
+                [path],
+            ).fetchone()
+            return [
+                {
+                    "name": "data",
+                    "kind": "dataset",
+                    "rowCount": int(row[0]) if row else 0,
+                }
+            ]
+
+        if file_format == "parquet":
+            row = self.conn.execute(
+                "SELECT COUNT(*) FROM read_parquet(?)", [path]
+            ).fetchone()
+            return [
+                {
+                    "name": "data",
+                    "kind": "dataset",
+                    "rowCount": int(row[0]) if row else 0,
+                }
+            ]
+
+        if file_format == "excel":
+            sheets = self._discover_excel_sheets(path)
+            entities: list[dict[str, Any]] = []
+            for sheet in sheets:
+                row = self.conn.execute(
+                    "SELECT COUNT(*) FROM read_xlsx(?, sheet = ?)",
+                    [path, sheet],
+                ).fetchone()
+                entities.append(
+                    {
+                        "name": sheet,
+                        "kind": "sheet",
+                        "rowCount": int(row[0]) if row else 0,
+                    }
+                )
+            return entities
+
+        if file_format == "sqlite":
+            return self._discover_sqlite_tables(path)
+
+        raise ValueError(f"Unsupported file format: {file_format}")
+
+    def _discover_excel_sheets(self, path: str) -> list[str]:
+        with zipfile.ZipFile(path, "r") as zf:
+            workbook_xml = zf.read("xl/workbook.xml")
+        root = ET.fromstring(workbook_xml)
+        ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        sheets = root.findall("m:sheets/m:sheet", ns)
+        return [
+            str(sheet.attrib.get("name", "")).strip()
+            for sheet in sheets
+            if sheet.attrib.get("name")
+        ]
+
+    def _discover_sqlite_tables(self, path: str) -> list[dict[str, Any]]:
+        conn = sqlite3.connect(path)
+        try:
+            rows = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+            ).fetchall()
+            out: list[dict[str, Any]] = []
+            for (table_name,) in rows:
+                safe_table = str(table_name).replace('"', '""')
+                count_row = conn.execute(
+                    f'SELECT COUNT(*) FROM "{safe_table}"'
+                ).fetchone()
+                out.append(
+                    {
+                        "name": str(table_name),
+                        "kind": "table",
+                        "rowCount": int(count_row[0]) if count_row else 0,
+                    }
+                )
+            return out
+        finally:
+            conn.close()
+
+    def _ensure_sqlite_extension(self) -> None:
+        self.conn.execute("INSTALL sqlite")
+        self.conn.execute("LOAD sqlite")
 
     def get_schema(self, dataset_id: str) -> dict:
         table = self._get_table(dataset_id)

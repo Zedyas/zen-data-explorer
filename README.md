@@ -11,8 +11,9 @@ No cloud service. No multi-user complexity. Runs on your machine.
 
 ## Features
 
-- CSV upload into DuckDB-backed local session
+- Multi-format upload into DuckDB-backed local session (`.csv`, `.parquet`, `.xlsx`, `.sqlite`, `.db`)
 - Multiple dataset instances in one local session
+- Entity discovery + import selection for Excel sheets and SQLite tables
 - Fast table browsing with server-side filtering, sorting, and keyset pagination
 - Rich column headers (type, null %, unique count, distribution preview)
 - Column profile popover (stats + distributions; full profile up to 1M rows, sampled above that with sample-labeled stats)

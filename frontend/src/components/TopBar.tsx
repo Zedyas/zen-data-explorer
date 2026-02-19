@@ -1,6 +1,7 @@
-import { useRef, type ChangeEvent } from 'react'
+import { useCallback, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useAppStore } from '../store.ts'
-import { useUploadDataset } from '../api.ts'
+import { useDiscoverDataset, useImportDatasets } from '../api.ts'
+import type { DiscoverResponse } from '../types.ts'
 
 export function TopBar() {
   const dataset = useAppStore((s) => s.activeDataset)
@@ -10,8 +11,11 @@ export function TopBar() {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const filters = useAppStore((s) => s.filters)
   const sort = useAppStore((s) => s.sort)
-  const upload = useUploadDataset()
+  const discover = useDiscoverDataset()
+  const importDatasets = useImportDatasets()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [pendingImport, setPendingImport] = useState<DiscoverResponse | null>(null)
+  const [selectedEntities, setSelectedEntities] = useState<string[]>([])
 
   if (!dataset) return null
 
@@ -39,9 +43,52 @@ export function TopBar() {
 
   const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) upload.mutate(file)
+    if (file) {
+      discover.mutate(file, {
+        onSuccess: (data) => {
+          if (!data.requiresSelection) {
+            importDatasets.mutate({ importId: data.importId, importMode: 'all' })
+            return
+          }
+          setPendingImport(data)
+          setSelectedEntities(data.entities.map((entity) => entity.name))
+        },
+      })
+    }
     e.currentTarget.value = ''
   }
+
+  const toggleEntity = useCallback((name: string) => {
+    setSelectedEntities((prev) =>
+      prev.includes(name) ? prev.filter((v) => v !== name) : [...prev, name],
+    )
+  }, [])
+
+  const confirmSelection = useCallback(() => {
+    if (!pendingImport) return
+    importDatasets.mutate(
+      {
+        importId: pendingImport.importId,
+        importMode: 'selected',
+        selectedEntities,
+        datasetNameMode: 'filename_entity',
+      },
+      {
+        onSuccess: () => {
+          setPendingImport(null)
+          setSelectedEntities([])
+        },
+      },
+    )
+  }, [importDatasets, pendingImport, selectedEntities])
+
+  const busy = discover.isPending || importDatasets.isPending
+  const pendingLabel = pendingImport?.format === 'excel' ? 'Sheets' : 'Tables'
+  const importError = useMemo(() => {
+    if (importDatasets.isError) return importDatasets.error.message
+    if (discover.isError) return discover.error.message
+    return null
+  }, [discover.error, discover.isError, importDatasets.error, importDatasets.isError])
 
   return (
     <div className="h-12 flex items-center gap-3 px-3 border-b border-border panel-surface shrink-0">
@@ -78,13 +125,14 @@ export function TopBar() {
       {/* Actions */}
       <button
         onClick={() => fileInputRef.current?.click()}
-        className="flex items-center gap-1.5 px-2 py-1 text-xs text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
+        className="flex items-center gap-1.5 px-2 py-1 text-xs text-text-muted hover:text-text hover:bg-surface-hover transition-colors disabled:opacity-50"
         title="Add another dataset"
+        disabled={busy}
       >
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
           <path d="M8 3v10M3 8h10" />
         </svg>
-        Add Data
+        {busy ? 'Importing...' : 'Add Data'}
       </button>
 
       <button
@@ -114,10 +162,73 @@ export function TopBar() {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".csv"
+        accept=".csv,.parquet,.xlsx,.sqlite,.db"
         onChange={onFileChange}
         className="hidden"
       />
+
+      {pendingImport && (
+        <div className="fixed inset-0 z-50 bg-bg-deep/80 flex items-center justify-center p-4">
+          <div className="w-full max-w-md border border-border-strong bg-surface">
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-text">Select {pendingLabel} to Import</div>
+                <div className="text-[11px] text-text-muted">{pendingImport.name}</div>
+              </div>
+              <button
+                onClick={() => {
+                  setPendingImport(null)
+                  setSelectedEntities([])
+                }}
+                className="text-text-muted hover:text-text text-sm"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="max-h-[320px] overflow-y-auto p-3 space-y-1">
+              {pendingImport.entities.map((entity) => {
+                const checked = selectedEntities.includes(entity.name)
+                return (
+                  <label key={entity.name} className="flex items-center justify-between gap-3 px-2 py-1.5 border border-border bg-bg cursor-pointer">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleEntity(entity.name)}
+                      />
+                      <span className="text-sm text-text truncate">{entity.name}</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-text-muted shrink-0">
+                      {entity.rowCount.toLocaleString()} rows
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+
+            {importError && (
+              <div className="px-4 py-2 text-xs text-error border-t border-border">{importError}</div>
+            )}
+
+            <div className="px-4 py-3 border-t border-border flex items-center justify-between">
+              <button
+                onClick={() => setSelectedEntities(pendingImport.entities.map((e) => e.name))}
+                className="text-xs text-text-muted hover:text-text"
+              >
+                Select all
+              </button>
+              <button
+                onClick={confirmSelection}
+                disabled={selectedEntities.length === 0 || importDatasets.isPending}
+                className="h-8 px-3 border border-border-strong bg-bg text-xs text-text-secondary hover:text-text hover:border-accent disabled:opacity-40"
+              >
+                {importDatasets.isPending ? 'Importing...' : `Import ${selectedEntities.length}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

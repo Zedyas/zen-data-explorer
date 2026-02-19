@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sqlite3
 import sys
+
+import duckdb
 
 
 from fastapi.testclient import TestClient
@@ -29,6 +32,147 @@ def test_upload_rejects_unsafe_filename() -> None:
     )
     assert resp.status_code == 400
     assert "Invalid filename" in resp.text
+
+
+def test_upload_accepts_parquet(tmp_path: Path) -> None:
+    parquet_path = tmp_path / "tiny.parquet"
+    conn = duckdb.connect()
+    conn.execute(
+        "COPY (SELECT 1 AS id, 'a' AS label UNION ALL SELECT 2 AS id, 'b' AS label) TO ? (FORMAT PARQUET)",
+        [str(parquet_path)],
+    )
+    conn.close()
+
+    resp = client.post(
+        "/api/datasets/upload",
+        files={
+            "file": (
+                "tiny.parquet",
+                parquet_path.read_bytes(),
+                "application/octet-stream",
+            )
+        },
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["name"] == "tiny.parquet"
+    assert payload["rowCount"] == 2
+
+
+def test_discover_and_import_csv(tmp_path: Path) -> None:
+    csv_path = tmp_path / "tiny.csv"
+    csv_path.write_text("id,name\n1,a\n2,b\n", encoding="utf-8")
+
+    discover_resp = client.post(
+        "/api/datasets/discover",
+        files={"file": ("tiny.csv", csv_path.read_bytes(), "text/csv")},
+    )
+    assert discover_resp.status_code == 200
+    discover_payload = discover_resp.json()
+    assert discover_payload["format"] == "csv"
+    assert discover_payload["requiresSelection"] is False
+    assert len(discover_payload["entities"]) == 1
+
+    import_resp = client.post(
+        "/api/datasets/import",
+        json={
+            "importId": discover_payload["importId"],
+            "importMode": "all",
+        },
+    )
+    assert import_resp.status_code == 200
+    import_payload = import_resp.json()
+    assert len(import_payload["datasets"]) == 1
+    assert import_payload["datasets"][0]["name"] == "tiny.csv"
+    assert import_payload["datasets"][0]["rowCount"] == 2
+
+
+def test_discover_and_import_parquet(tmp_path: Path) -> None:
+    parquet_path = tmp_path / "batch.parquet"
+    conn = duckdb.connect()
+    conn.execute(
+        "COPY (SELECT 101 AS id, 'x' AS label UNION ALL SELECT 102 AS id, 'y' AS label) TO ? (FORMAT PARQUET)",
+        [str(parquet_path)],
+    )
+    conn.close()
+
+    discover_resp = client.post(
+        "/api/datasets/discover",
+        files={
+            "file": (
+                "batch.parquet",
+                parquet_path.read_bytes(),
+                "application/octet-stream",
+            )
+        },
+    )
+    assert discover_resp.status_code == 200
+    discover_payload = discover_resp.json()
+    assert discover_payload["format"] == "parquet"
+    assert discover_payload["requiresSelection"] is False
+
+    import_resp = client.post(
+        "/api/datasets/import",
+        json={
+            "importId": discover_payload["importId"],
+            "importMode": "all",
+        },
+    )
+    assert import_resp.status_code == 200
+    import_payload = import_resp.json()
+    assert len(import_payload["datasets"]) == 1
+    assert import_payload["datasets"][0]["name"] == "batch.parquet"
+    assert import_payload["datasets"][0]["rowCount"] == 2
+
+
+def test_discover_and_import_sqlite_selected_table(tmp_path: Path) -> None:
+    sqlite_path = tmp_path / "mini.sqlite"
+    conn = sqlite3.connect(sqlite_path)
+    conn.execute("CREATE TABLE members(id INTEGER, name TEXT)")
+    conn.execute("CREATE TABLE claims(id INTEGER, amount REAL)")
+    conn.executemany(
+        "INSERT INTO members(id, name) VALUES (?, ?)",
+        [(1, "a"), (2, "b"), (3, "c")],
+    )
+    conn.executemany(
+        "INSERT INTO claims(id, amount) VALUES (?, ?)",
+        [(10, 100.0), (11, 250.5)],
+    )
+    conn.commit()
+    conn.close()
+
+    discover_resp = client.post(
+        "/api/datasets/discover",
+        files={
+            "file": (
+                "mini.sqlite",
+                sqlite_path.read_bytes(),
+                "application/octet-stream",
+            )
+        },
+    )
+    assert discover_resp.status_code == 200
+    discover_payload = discover_resp.json()
+    assert discover_payload["format"] == "sqlite"
+    assert discover_payload["requiresSelection"] is True
+    names = {e["name"] for e in discover_payload["entities"]}
+    assert {"members", "claims"}.issubset(names)
+
+    import_resp = client.post(
+        "/api/datasets/import",
+        json={
+            "importId": discover_payload["importId"],
+            "importMode": "selected",
+            "selectedEntities": ["members"],
+            "datasetNameMode": "filename_entity",
+        },
+    )
+    assert import_resp.status_code == 200
+    import_payload = import_resp.json()
+    assert len(import_payload["datasets"]) == 1
+    dataset = import_payload["datasets"][0]
+    assert dataset["name"] == "mini_members"
+    assert dataset["rowCount"] == 3
 
 
 def test_page_rejects_invalid_sort_column() -> None:
