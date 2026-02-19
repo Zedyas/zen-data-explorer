@@ -1,12 +1,15 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useAppStore } from '../store.ts'
 import type { Filter, Column } from '../types.ts'
+import { useColumnValueSuggestions } from '../api.ts'
 
 // ── Operator options by column type ──
 const OPERATORS: Record<string, { label: string; value: string }[]> = {
   string: [
     { label: '=', value: '=' },
     { label: '!=', value: '!=' },
+    { label: 'in', value: 'in' },
+    { label: 'not in', value: 'not_in' },
     { label: 'contains', value: 'contains' },
     { label: 'starts with', value: 'starts_with' },
     { label: 'is null', value: 'is_null' },
@@ -15,6 +18,8 @@ const OPERATORS: Record<string, { label: string; value: string }[]> = {
   integer: [
     { label: '=', value: '=' },
     { label: '!=', value: '!=' },
+    { label: 'in', value: 'in' },
+    { label: 'not in', value: 'not_in' },
     { label: '>', value: '>' },
     { label: '<', value: '<' },
     { label: '>=', value: '>=' },
@@ -25,6 +30,8 @@ const OPERATORS: Record<string, { label: string; value: string }[]> = {
   float: [
     { label: '=', value: '=' },
     { label: '!=', value: '!=' },
+    { label: 'in', value: 'in' },
+    { label: 'not in', value: 'not_in' },
     { label: '>', value: '>' },
     { label: '<', value: '<' },
     { label: '>=', value: '>=' },
@@ -34,6 +41,9 @@ const OPERATORS: Record<string, { label: string; value: string }[]> = {
   ],
   date: [
     { label: '=', value: '=' },
+    { label: '!=', value: '!=' },
+    { label: 'in', value: 'in' },
+    { label: 'not in', value: 'not_in' },
     { label: 'before', value: '<' },
     { label: 'after', value: '>' },
     { label: 'is null', value: 'is_null' },
@@ -41,6 +51,9 @@ const OPERATORS: Record<string, { label: string; value: string }[]> = {
   ],
   boolean: [
     { label: '=', value: '=' },
+    { label: '!=', value: '!=' },
+    { label: 'in', value: 'in' },
+    { label: 'not in', value: 'not_in' },
     { label: 'is null', value: 'is_null' },
     { label: 'is not null', value: 'is_not_null' },
   ],
@@ -57,7 +70,9 @@ function FilterPill({ filter, index }: { filter: Filter; index: number }) {
   const displayValue =
     filter.operator === 'is_null' || filter.operator === 'is_not_null'
       ? ''
-      : typeof filter.value === 'string'
+      : Array.isArray(filter.value)
+        ? `[${filter.value.join(', ')}]`
+        : typeof filter.value === 'string'
         ? `"${filter.value}"`
         : String(filter.value)
 
@@ -68,6 +83,10 @@ function FilterPill({ filter, index }: { filter: Filter; index: number }) {
         ? 'is not null'
       : filter.operator === 'starts_with'
         ? 'starts with'
+        : filter.operator === 'not_in'
+          ? 'not in'
+          : filter.operator === 'in'
+            ? 'in'
         : filter.operator
 
   return (
@@ -90,6 +109,7 @@ function FilterPill({ filter, index }: { filter: Filter; index: number }) {
 
 // ── Add Filter Dropdown ──
 function AddFilterDropdown({ onClose }: { onClose: () => void }) {
+  const datasetId = useAppStore((s) => s.activeDataset?.id)
   const columns = useAppStore((s) => s.activeDataset?.columns ?? [])
   const addFilter = useAppStore((s) => s.addFilter)
   const [step, setStep] = useState<'column' | 'operator' | 'value'>('column')
@@ -112,20 +132,40 @@ function AddFilterDropdown({ onClose }: { onClose: () => void }) {
     inputRef.current?.focus()
   }, [step])
 
+  const isListOp = selectedOp === 'in' || selectedOp === 'not_in'
+
+  const { data: suggestionData } = useColumnValueSuggestions(
+    datasetId,
+    step === 'value' && selectedColumn ? selectedColumn.name : null,
+    value,
+    8,
+  )
+
+  const suggestions = useMemo(() => suggestionData?.values ?? [], [suggestionData])
+
   const filteredColumns = columns.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase()),
   )
 
   const handleSubmit = useCallback(() => {
     if (!selectedColumn) return
+    const finalValue = isListOp
+      ? value
+          .split(/[,\n]/)
+          .map((v) => v.trim())
+          .filter(Boolean)
+      : value
+
+    if (isListOp && Array.isArray(finalValue) && finalValue.length === 0) return
+
     const filter: Filter = {
       column: selectedColumn.name,
       operator: selectedOp,
-      value: selectedOp === 'is_null' || selectedOp === 'is_not_null' ? '' : value,
+      value: selectedOp === 'is_null' || selectedOp === 'is_not_null' ? '' : finalValue,
     }
     addFilter(filter)
     onClose()
-  }, [selectedColumn, selectedOp, value, addFilter, onClose])
+  }, [selectedColumn, selectedOp, value, isListOp, addFilter, onClose])
 
   return (
     <div
@@ -203,11 +243,11 @@ function AddFilterDropdown({ onClose }: { onClose: () => void }) {
           <div className="flex gap-2">
             <input
               ref={inputRef}
-              type={selectedColumn.type === 'integer' || selectedColumn.type === 'float' ? 'number' : 'text'}
+              type={isListOp ? 'text' : selectedColumn.type === 'integer' || selectedColumn.type === 'float' ? 'number' : 'text'}
               value={value}
               onChange={(e) => setValue(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && value && handleSubmit()}
-              placeholder="Enter value..."
+              placeholder={isListOp ? 'Paste values (comma/newline)' : 'Enter value...'}
               className="flex-1 px-2 py-1 text-xs bg-surface border border-border rounded focus:border-accent focus:outline-none text-text font-mono placeholder:text-text-muted"
             />
             <button
@@ -218,6 +258,30 @@ function AddFilterDropdown({ onClose }: { onClose: () => void }) {
               Add
             </button>
           </div>
+
+          {!isListOp && suggestions.length > 0 && (
+            <div className="mt-2 border border-border rounded bg-bg max-h-32 overflow-y-auto">
+              {suggestions.map((item) => (
+                <button
+                  key={`${item.value}-${item.count}`}
+                  onClick={() => {
+                    setValue(item.value)
+                    const filter: Filter = {
+                      column: selectedColumn.name,
+                      operator: selectedOp,
+                      value: item.value,
+                    }
+                    addFilter(filter)
+                    onClose()
+                  }}
+                  className="w-full px-2 py-1 text-[11px] text-left hover:bg-surface-hover text-text-secondary flex items-center justify-between"
+                >
+                  <span className="truncate mr-2">{item.value}</span>
+                  <span className="text-text-muted font-mono">{item.count}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -235,6 +299,7 @@ export function FilterToolbar() {
   const [showDropdown, setShowDropdown] = useState(false)
   const [showColumnsDropdown, setShowColumnsDropdown] = useState(false)
   const columnsRef = useRef<HTMLDivElement>(null)
+  const hasColumnSelectionChanges = !!dataset && visibleColumns.length !== dataset.columns.length
 
   useEffect(() => {
     const onDocMouseDown = (e: MouseEvent) => {
@@ -267,9 +332,16 @@ export function FilterToolbar() {
       <div className="relative" ref={columnsRef}>
         <button
           onClick={() => setShowColumnsDropdown(!showColumnsDropdown)}
-          className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-md border border-border-strong bg-surface-elevated/40 hover:border-accent text-text-secondary hover:text-text transition-colors"
+          className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded-md border transition-colors ${
+            hasColumnSelectionChanges
+              ? 'border-accent text-accent bg-accent-dim hover:bg-accent-muted'
+              : 'border-border-strong bg-surface-elevated/40 hover:border-accent text-text-secondary hover:text-text'
+          }`}
         >
           Columns
+          {hasColumnSelectionChanges && (
+            <span className="text-[10px] font-mono text-accent">*</span>
+          )}
         </button>
         {showColumnsDropdown && (
           <div className="absolute top-full left-0 mt-1 w-56 gradient-border-subtle rounded-lg overflow-hidden z-50 animate-slide-down">

@@ -15,6 +15,7 @@ No cloud service. No multi-user complexity. Runs on your machine.
 - Multiple dataset instances in one local session
 - Entity discovery + import selection for Excel sheets and SQLite tables
 - Fast table browsing with server-side filtering, sorting, and keyset pagination
+- Filter UX supports `in` / `not_in` operations with value suggestions
 - Rich column headers (type, null %, unique count, distribution preview)
 - Column profile popover (stats + distributions; full profile up to 1M rows, sampled above that with sample-labeled stats)
 - Notebook cells:
@@ -89,6 +90,11 @@ This includes formulas and definitions for:
 - Endpoint naming and phase rollout: `docs/API_ENDPOINT_PLAN.md`
 - Profiling metric glossary/source-of-truth: `docs/PROFILING_METRICS.md`
 - Ongoing product idea log: `docs/FUTURE_IDEAS.md`
+
+## Scalability Roadmap
+
+- Post-core-feature phase targets scaling to **100s of millions of rows**.
+- Planned optimization focus is tracked in `docs/FUTURE_IDEAS.md` (Scalability section).
 
 ## Notes
 

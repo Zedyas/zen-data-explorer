@@ -70,6 +70,16 @@ class Engine(ABC):
         """Execute structured table query spec and return rows + generated code."""
 
     @abstractmethod
+    def get_column_value_suggestions(
+        self,
+        dataset_id: str,
+        column: str,
+        query: str | None,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """Return top value suggestions for a column."""
+
+    @abstractmethod
     def export_csv(
         self,
         dataset_id: str,
@@ -111,16 +121,51 @@ FILTER_OPERATORS_BY_TYPE: dict[str, set[str]] = {
     "string": {
         "=",
         "!=",
+        "in",
+        "not_in",
         "contains",
         "starts_with",
         "ends_with",
         "is_null",
         "is_not_null",
     },
-    "integer": {"=", "!=", ">", "<", ">=", "<=", "is_null", "is_not_null"},
-    "float": {"=", "!=", ">", "<", ">=", "<=", "is_null", "is_not_null"},
-    "date": {"=", ">", "<", ">=", "<=", "is_null", "is_not_null"},
-    "boolean": {"=", "!=", "is_null", "is_not_null"},
+    "integer": {
+        "=",
+        "!=",
+        "in",
+        "not_in",
+        ">",
+        "<",
+        ">=",
+        "<=",
+        "is_null",
+        "is_not_null",
+    },
+    "float": {
+        "=",
+        "!=",
+        "in",
+        "not_in",
+        ">",
+        "<",
+        ">=",
+        "<=",
+        "is_null",
+        "is_not_null",
+    },
+    "date": {
+        "=",
+        "!=",
+        "in",
+        "not_in",
+        ">",
+        "<",
+        ">=",
+        "<=",
+        "is_null",
+        "is_not_null",
+    },
+    "boolean": {"=", "!=", "in", "not_in", "is_null", "is_not_null"},
 }
 
 HAVING_OPERATORS = {"=", "!=", ">", "<", ">=", "<="}
@@ -1245,6 +1290,39 @@ class DuckDBEngine(Engine):
             df = self.conn.execute(f"SELECT * FROM {table_sql}").df()
         return execute_python_code(code, df)
 
+    def get_column_value_suggestions(
+        self,
+        dataset_id: str,
+        column: str,
+        query: str | None,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        table = self._get_table(dataset_id)
+        col_meta = self._get_column_meta(table)
+        if column not in col_meta:
+            raise ValueError(f"Invalid filter column: {column}")
+
+        table_sql = self._quote_ident(table)
+        col_sql = self._quote_ident(column)
+        q = (query or "").strip()
+        params: list[Any] = []
+        where_sql = f"{col_sql} IS NOT NULL"
+        if q:
+            where_sql += f" AND CAST({col_sql} AS VARCHAR) ILIKE ?"
+            params.append(f"%{q}%")
+
+        rows = self.conn.execute(
+            f"SELECT CAST({col_sql} AS VARCHAR) AS value, COUNT(*) AS cnt "
+            f"FROM {table_sql} "
+            f"WHERE {where_sql} "
+            f"GROUP BY 1 "
+            f"ORDER BY cnt DESC, value ASC "
+            f"LIMIT ?",
+            [*params, limit],
+        ).fetchall()
+
+        return [{"value": str(r[0]), "count": int(r[1])} for r in rows]
+
     def run_table_query(self, dataset_id: str, spec: dict[str, Any]) -> dict:
         table = self._get_table(dataset_id)
         table_sql = self._quote_ident(table)
@@ -1578,6 +1656,12 @@ class DuckDBEngine(Engine):
         if op == "is_not_null":
             return f"{col_sql} IS NOT NULL", []
 
+        if op in {"in", "not_in"}:
+            values = self._coerce_value_list(raw_val, app_type, col, op)
+            placeholders = ", ".join(["?"] * len(values))
+            sql_op = "IN" if op == "in" else "NOT IN"
+            return f"{col_sql} {sql_op} ({placeholders})", values
+
         value = self._coerce_value(raw_val, app_type, col, op)
 
         if op == "=":
@@ -1647,6 +1731,29 @@ class DuckDBEngine(Engine):
             raise ValueError(f"Invalid date value for column '{col}': {value}")
 
         return str(value)
+
+    def _coerce_value_list(
+        self,
+        raw_value: Any,
+        app_type: str,
+        col: str,
+        op: str,
+    ) -> list[Any]:
+        values: list[Any]
+        if isinstance(raw_value, list):
+            values = raw_value
+        elif isinstance(raw_value, str):
+            normalized = raw_value.replace("\n", ",")
+            values = [part.strip() for part in normalized.split(",") if part.strip()]
+        else:
+            raise ValueError(
+                f"Filter value for '{op}' on column '{col}' must be a list or comma/newline-separated string"
+            )
+
+        if not values:
+            raise ValueError(f"Filter value list is empty for column '{col}'")
+
+        return [self._coerce_value(item, app_type, col, op) for item in values]
 
     def _build_cursor_predicate(
         self,

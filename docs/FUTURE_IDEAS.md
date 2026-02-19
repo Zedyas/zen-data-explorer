@@ -23,6 +23,19 @@ This file tracks product ideas discussed during implementation so they are not l
 - Extend variable model beyond `value_list` to `dataframe` and scalar variables after MVP.
 - Add dependency graph + stale indicators for variables sourced from code/table cells.
 
+## Scalability (Post-Core Features)
+
+- After full feature implementation, run a dedicated performance/scalability phase targeting **100s of millions of rows** (not billions).
+- Prioritized optimization areas:
+  - query shaping (projection + selective filtering)
+  - reusable materialized snapshots/caches for repeated views
+  - async/background profiling for large datasets
+  - better random-access page jump strategy under keyset pagination
+  - pushdown execution paths for external DB-backed sources
+
 ## UX / Navigation
 
 - Keep recent sessions on landing page only (not in workspace sidebar) for now.
+- Add global keyboard shortcut system after core workflows stabilize.
+  - Goal: consistent shortcuts across filters, cells, run actions, and navigation.
+  - Define full shortcut map in one pass (avoid piecemeal bindings).

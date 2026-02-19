@@ -74,6 +74,15 @@ export interface ImportResponse {
   datasets: UploadResponse[]
 }
 
+export interface ColumnValueSuggestion {
+  value: string
+  count: number
+}
+
+export interface ColumnValueSuggestionResponse {
+  values: ColumnValueSuggestion[]
+}
+
 // Phase 2 types
 
 export interface ProfileResponse {

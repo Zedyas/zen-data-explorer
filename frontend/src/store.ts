@@ -71,6 +71,7 @@ interface AppState {
   cursorStack: (string | null)[]
   goNextPage: (nextCursor: string | null) => void
   goPrevPage: () => void
+  setPaginationState: (page: number, cursor: string | null, cursorStack: (string | null)[]) => void
   resetPagination: () => void
 
   visibleColumns: string[]
@@ -221,6 +222,8 @@ export const useAppStore = create<AppState>((set) => ({
         cursorStack: nextStack,
       }
     }),
+  setPaginationState: (page, cursor, cursorStack) =>
+    set({ page: Math.max(0, page), cursor, cursorStack }),
   resetPagination: () => set({ page: 0, cursor: null, cursorStack: [] }),
 
   visibleColumns: [],

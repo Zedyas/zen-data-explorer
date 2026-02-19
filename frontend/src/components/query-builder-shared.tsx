@@ -1,11 +1,11 @@
 import type { AggregationSpec, ColumnType, Filter, HavingSpec, TableQuerySpec } from '../types.ts'
 
 export const FILTER_OPS_BY_TYPE: Record<ColumnType, readonly string[]> = {
-  string: ['=', '!=', 'contains', 'starts_with', 'ends_with', 'is_null', 'is_not_null'],
-  integer: ['=', '!=', '>', '<', '>=', '<=', 'is_null', 'is_not_null'],
-  float: ['=', '!=', '>', '<', '>=', '<=', 'is_null', 'is_not_null'],
-  date: ['=', '>', '<', '>=', '<=', 'is_null', 'is_not_null'],
-  boolean: ['=', '!=', 'is_null', 'is_not_null'],
+  string: ['=', '!=', 'in', 'not_in', 'contains', 'starts_with', 'ends_with', 'is_null', 'is_not_null'],
+  integer: ['=', '!=', 'in', 'not_in', '>', '<', '>=', '<=', 'is_null', 'is_not_null'],
+  float: ['=', '!=', 'in', 'not_in', '>', '<', '>=', '<=', 'is_null', 'is_not_null'],
+  date: ['=', '!=', 'in', 'not_in', '>', '<', '>=', '<=', 'is_null', 'is_not_null'],
+  boolean: ['=', '!=', 'in', 'not_in', 'is_null', 'is_not_null'],
 }
 export const AGG_OPS: ReadonlyArray<AggregationSpec['op']> = ['count', 'sum', 'avg', 'min', 'max']
 export const HAVING_OPS: ReadonlyArray<'=' | '!=' | '>' | '<' | '>=' | '<='> = ['=', '!=', '>', '<', '>=', '<=']
@@ -23,6 +23,8 @@ export function getAggAlias(agg: AggregationSpec): string {
 }
 
 export function formatFilterOp(op: string) {
+  if (op === 'not_in') return 'not in'
+  if (op === 'in') return 'in'
   if (op === 'starts_with') return 'starts with'
   if (op === 'ends_with') return 'ends with'
   if (op === 'is_null') return 'is null'

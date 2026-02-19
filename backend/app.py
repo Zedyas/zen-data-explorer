@@ -274,6 +274,24 @@ async def profile_column(
         raise HTTPException(400, f"Profile query failed: {e}")
 
 
+@app.get("/api/datasets/{dataset_id}/columns/{column:path}/values")
+async def column_value_suggestions(
+    dataset_id: str,
+    column: str,
+    q: str | None = Query(None),
+    limit: int = Query(10, ge=1, le=100),
+):
+    try:
+        values = engine.get_column_value_suggestions(dataset_id, column, q, limit)
+        return {"values": values}
+    except ValueError as e:
+        if "not found" in str(e).lower():
+            raise HTTPException(404, str(e))
+        raise HTTPException(400, str(e))
+    except duckdb.Error as e:
+        raise HTTPException(400, f"Value suggestion query failed: {e}")
+
+
 # ── SQL Query ──
 
 

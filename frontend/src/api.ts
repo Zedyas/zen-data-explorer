@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from '@tanstack/react-query'
 import type {
+  ColumnValueSuggestionResponse,
   DiscoverResponse,
   Filter,
   ImportRequest,
@@ -151,6 +152,28 @@ export function useColumnProfile(datasetId: string | undefined, column: string |
     },
     enabled: !!datasetId && !!column,
     staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useColumnValueSuggestions(
+  datasetId: string | undefined,
+  column: string | null,
+  query: string,
+  limit = 8,
+) {
+  return useQuery({
+    queryKey: ['value-suggestions', datasetId, column, query, limit],
+    queryFn: () => {
+      if (!datasetId || !column) throw new Error('Dataset and column are required')
+      const params = new URLSearchParams()
+      if (query.trim()) params.set('q', query.trim())
+      params.set('limit', String(limit))
+      return request<ColumnValueSuggestionResponse>(
+        `/datasets/${datasetId}/columns/${encodeURIComponent(column)}/values?${params.toString()}`,
+      )
+    },
+    enabled: !!datasetId && !!column,
+    staleTime: 30 * 1000,
   })
 }
 

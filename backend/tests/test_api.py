@@ -310,6 +310,51 @@ def test_page_accepts_ends_with_filter() -> None:
     assert all(str(row["region"]).lower().endswith("st") for row in payload["rows"])
 
 
+def test_page_accepts_in_filter() -> None:
+    dataset_id = _dataset_id()
+    resp = client.get(
+        f"/api/datasets/{dataset_id}/page",
+        params={
+            "filters": json.dumps(
+                [{"column": "region", "operator": "in", "value": ["West", "North"]}]
+            )
+        },
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert all(str(row["region"]) in {"West", "North"} for row in payload["rows"])
+
+
+def test_page_accepts_not_in_filter() -> None:
+    dataset_id = _dataset_id()
+    resp = client.get(
+        f"/api/datasets/{dataset_id}/page",
+        params={
+            "filters": json.dumps(
+                [{"column": "region", "operator": "not_in", "value": ["West"]}]
+            )
+        },
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert all(str(row["region"]) != "West" for row in payload["rows"])
+
+
+def test_column_value_suggestions_endpoint() -> None:
+    dataset_id = _dataset_id()
+    resp = client.get(
+        f"/api/datasets/{dataset_id}/columns/region/values",
+        params={"q": "we", "limit": 5},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert "values" in payload
+    assert isinstance(payload["values"], list)
+    if payload["values"]:
+        assert "value" in payload["values"][0]
+        assert "count" in payload["values"][0]
+
+
 def test_schema_includes_column_sparklines() -> None:
     dataset_id = _dataset_id()
     resp = client.get(f"/api/datasets/{dataset_id}/schema")

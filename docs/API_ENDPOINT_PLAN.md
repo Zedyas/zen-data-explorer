@@ -13,6 +13,7 @@ This document tracks endpoint naming and intent across current + upcoming phases
 - `POST /api/datasets/{dataset_id}/query`
 - `POST /api/datasets/{dataset_id}/code`
 - `POST /api/datasets/{dataset_id}/table-query`
+- `GET /api/datasets/{dataset_id}/columns/{column}/values`
 - `GET /api/datasets/{dataset_id}/export`
 
 ## Naming Conventions
@@ -41,11 +42,11 @@ This document tracks endpoint naming and intent across current + upcoming phases
 
 ### Phase 3 (Code Cell)
 
-- `POST /api/datasets/{dataset_id}/code`
+- complete
 
 ### Phase 4 (Filter UX)
 
-- `GET /api/datasets/{dataset_id}/columns/{column}/values`
+- complete core backend pieces (`in`/`not_in` + value suggestions endpoint)
 
 ### Phase 4.5 (Variables)
 

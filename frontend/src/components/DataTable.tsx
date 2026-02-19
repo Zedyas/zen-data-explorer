@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useCallback } from 'react'
+import { useMemo, useRef, useState, useCallback, useEffect } from 'react'
 import {
   useReactTable,
   getCoreRowModel,
@@ -11,7 +11,7 @@ import { useDatasetPage } from '../api.ts'
 import { ColumnHeader } from './ColumnHeader.tsx'
 import { ProfilePopover } from './ProfilePopover.tsx'
 import { ColumnMenu } from './ColumnMenu.tsx'
-import type { Column } from '../types.ts'
+import type { Column, PageResponse } from '../types.ts'
 
 const ROW_HEIGHT = 34
 
@@ -23,8 +23,10 @@ export function DataTable() {
   const page = useAppStore((s) => s.page)
   const pageSize = useAppStore((s) => s.pageSize)
   const cursor = useAppStore((s) => s.cursor)
+  const cursorStack = useAppStore((s) => s.cursorStack)
   const goNextPage = useAppStore((s) => s.goNextPage)
   const goPrevPage = useAppStore((s) => s.goPrevPage)
+  const setPaginationState = useAppStore((s) => s.setPaginationState)
   const visibleColumns = useAppStore((s) => s.visibleColumns)
   const toggleColumn = useAppStore((s) => s.toggleColumn)
   const addFilter = useAppStore((s) => s.addFilter)
@@ -32,6 +34,12 @@ export function DataTable() {
 
   const [profileAnchor, setProfileAnchor] = useState<DOMRect | null>(null)
   const [contextMenu, setContextMenu] = useState<{ column: string; x: number; y: number } | null>(null)
+  const [jumpInput, setJumpInput] = useState('1')
+  const [isJumping, setIsJumping] = useState(false)
+
+  useEffect(() => {
+    setJumpInput(String(page + 1))
+  }, [page])
 
   const { data: pageData, isLoading, isFetching } = useDatasetPage(
     dataset
@@ -138,12 +146,64 @@ export function DataTable() {
   const totalRows = pageData?.totalRows ?? dataset?.rowCount ?? 0
   const shownRows = filteredRows > 0 ? Math.min(page * pageSize + rows.length, filteredRows) : 0
 
+  const fetchPageByCursor = useCallback(async (cursorToken: string | null): Promise<PageResponse> => {
+    if (!dataset) throw new Error('No active dataset')
+    const searchParams = new URLSearchParams()
+    searchParams.set('page_size', String(pageSize))
+    if (cursorToken) searchParams.set('cursor', cursorToken)
+    if (sort) {
+      searchParams.set('sort_column', sort.column)
+      searchParams.set('sort_direction', sort.direction)
+    }
+    if (filters.length > 0) searchParams.set('filters', JSON.stringify(filters))
+
+    const res = await fetch(`/api/datasets/${dataset.id}/page?${searchParams.toString()}`)
+    if (!res.ok) throw new Error(await res.text())
+    return res.json()
+  }, [dataset, pageSize, sort, filters])
+
+  const jumpToPage = useCallback(async () => {
+    if (!dataset) return
+    const parsed = Number.parseInt(jumpInput, 10)
+    if (!Number.isFinite(parsed)) return
+    const targetPage = Math.max(0, Math.min(Math.max(1, totalPages || 1) - 1, parsed - 1))
+    if (targetPage === page) return
+
+    if (targetPage < page) {
+      const nextCursor = targetPage === 0 ? null : (cursorStack[targetPage] ?? null)
+      const nextStack = cursorStack.slice(0, targetPage)
+      setPaginationState(targetPage, nextCursor, nextStack)
+      return
+    }
+
+    setIsJumping(true)
+    try {
+      let nextPage = page
+      let nextCursor = cursor
+      const nextStack = [...cursorStack]
+      const remaining = targetPage - page
+      const maxHop = Math.min(remaining, 25)
+
+      for (let i = 0; i < maxHop; i += 1) {
+        const data = await fetchPageByCursor(nextCursor)
+        if (!data.nextCursor) break
+        nextStack.push(nextCursor)
+        nextCursor = data.nextCursor
+        nextPage += 1
+      }
+
+      setPaginationState(nextPage, nextCursor, nextStack)
+    } finally {
+      setIsJumping(false)
+    }
+  }, [dataset, jumpInput, totalPages, page, cursorStack, setPaginationState, cursor, fetchPageByCursor])
+
   if (!dataset) return null
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Table container */}
-      <div ref={parentRef} className="flex-1 overflow-auto">
+      <div ref={parentRef} className="flex-1 overflow-auto relative">
         <table className="w-full border-collapse" style={{ minWidth: '100%' }}>
           {/* Header */}
           <thead className="sticky top-0 z-10">
@@ -228,13 +288,13 @@ export function DataTable() {
           </tbody>
         </table>
 
-        {isLoading && (
-          <div className="flex items-center justify-center py-20 text-sm text-text-muted">
+        {isLoading && !pageData && (
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-text-muted bg-bg/60 pointer-events-none">
             Loading data...
           </div>
         )}
 
-        {!isLoading && rows.length === 0 && (
+        {!isLoading && !isFetching && rows.length === 0 && (
           <div className="flex items-center justify-center py-20 text-sm text-text-muted">
             No data to display
           </div>
@@ -251,11 +311,26 @@ export function DataTable() {
           >
             {'<'}
           </button>
-          <span>
-            {page + 1}
-          </span>
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={jumpInput}
+            onChange={(e) => {
+              const digitsOnly = e.target.value.replace(/\D/g, '')
+              setJumpInput(digitsOnly)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void jumpToPage()
+            }}
+            onBlur={() => {
+              void jumpToPage()
+            }}
+            disabled={isJumping}
+            className="h-6 w-12 px-1 border border-border bg-bg text-[11px] text-text-secondary text-center disabled:opacity-40"
+          />
           <button
-            disabled={!pageData?.nextCursor}
+            disabled={!pageData?.nextCursor || isJumping}
             onClick={() => goNextPage(pageData?.nextCursor ?? null)}
             className="h-6 px-2 border border-border bg-bg hover:border-accent disabled:opacity-30 disabled:cursor-not-allowed text-text-secondary hover:text-text transition-colors"
           >
@@ -267,7 +342,9 @@ export function DataTable() {
         <div className="text-text-muted font-mono">
           <span>{shownRows.toLocaleString()} / {filteredRows.toLocaleString()} rows</span>
           {filteredRows !== totalRows && <span> ({totalRows.toLocaleString()} total)</span>}
-          {isFetching && !isLoading && <span className="ml-2 text-accent">updating...</span>}
+          <span className="inline-block min-w-[64px] ml-2 text-right text-accent">
+            {isLoading ? 'loading' : isFetching ? 'updating' : ''}
+          </span>
         </div>
       </div>
 
